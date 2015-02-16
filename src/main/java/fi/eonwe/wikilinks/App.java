@@ -1,4 +1,4 @@
-package wikilinks;
+package fi.eonwe.wikilinks;
 
 /**
  * Hello world!

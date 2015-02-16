@@ -1,4 +1,4 @@
-package wikilinks;
+package fi.eonwe.wikilinks;
 
 import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream;
 

@@ -1,4 +1,4 @@
-package wikilinks;
+package fi.eonwe.wikilinks;
 
 import junit.framework.Test;
 import junit.framework.TestCase;

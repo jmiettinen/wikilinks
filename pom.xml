@@ -2,16 +2,17 @@
     xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>wikilinks</groupId>
-    <artifactId>wikilinks</artifactId>
+    <groupId>fi.eonwe.wikilinks</groupId>
+    <artifactId>fi.eonwe.wikilinks</artifactId>
     <version>1.0-SNAPSHOT</version>
     <packaging>jar</packaging>
 
-    <name>wikilinks</name>
+    <name>fi.eonwe.wikilinks</name>
     <url>http://maven.apache.org</url>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <argLine>-Djavax.xml.accessExternalSchema=all -Xmx1G</argLine>
     </properties>
 
     <dependencies>
@@ -41,25 +42,23 @@
                     <encoding>UTF-8</encoding>
                 </configuration>
             </plugin>
-            <!-- JAXB xjc plugin that invokes the xjc compiler to compile XML schema into Java classes.-->
             <plugin>
-                <groupId>org.codehaus.mojo</groupId>
-                <artifactId>jaxb2-maven-plugin</artifactId>
+                <groupId>org.jvnet.jaxb2.maven2</groupId>
+                <artifactId>maven-jaxb2-plugin</artifactId>
+                <version>0.11.0</version>
                 <executions>
                     <execution>
-                        <phase>generate-sources</phase>
                         <goals>
-                            <goal>xjc</goal>
+                            <goal>generate</goal>
                         </goals>
                     </execution>
                 </executions>
                 <configuration>
-                    <!-- The schema directory or xsd files. -->
-                    <schemaDirectory>${basedir}/src/main/resources</schemaDirectory>
-                    <!-- The package in which the source files will be generated. -->
-                    <packageName>fi.eonwe.wikilinks</packageName>
-                    <!-- The working directory to create the generated java source files. -->
-                    <outputDirectory>${basedir}/src/main/generated-sources</outputDirectory>
+                    <generateDirectory>${basedir}/src/main/generated-sources</generateDirectory>
+                    <generatePackage>fi.eonwe.wikilinks</generatePackage>
+                    <episode>false</episode>
+                    <readOnly>true</readOnly>
+                    <markGenerated>true</markGenerated>
                 </configuration>
             </plugin>
         </plugins>
