@@ -19,13 +19,18 @@
         <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
-            <version>3.8.1</version>
+            <version>4.12</version>
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.commons</groupId>
             <artifactId>commons-compress</artifactId>
             <version>1.9</version>
+        </dependency>
+        <dependency>
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava</artifactId>
+            <version>18.0</version>
         </dependency>
     </dependencies>
 
@@ -58,7 +63,9 @@
                     <generatePackage>fi.eonwe.wikilinks.jaxb</generatePackage>
                     <episode>false</episode>
                     <readOnly>true</readOnly>
-                    <markGenerated>true</markGenerated>
+                    <!--<debug>true</debug>-->
+                    <!--<verbose>true</verbose>-->
+                    <accessExternalDTD>none</accessExternalDTD>
                 </configuration>
             </plugin>
             <plugin>
