@@ -29,6 +29,8 @@ import java.util.function.Consumer;
  */
 public class WikiProcessor {
 
+    private static final int VERSION_NUMBER = 0x52ea2a00 | 1;
+
     public static List<PackedWikiPage> readPages(InputStream input) {
         WikiProcessor processor = new WikiProcessor();
         Map<String, PagePointer> pages = processor.preProcess(input);
@@ -100,15 +102,9 @@ public class WikiProcessor {
             ultimateTarget = null;
         } else {
             ultimateTarget = resolveUltimateTarget(redirectPointer, map);
+            redirectPointer.page = ultimateTarget;
         }
         return ultimateTarget;
-    }
-
-
-    private static PagePointer resolve(String title, HashMap<String, PagePointer> map) {
-        PagePointer start = map.get(title);
-        if (start == null) return null;
-        return null;
     }
 
     public static void printStatistics(Map<String, PagePointer> map) {
@@ -170,9 +166,14 @@ public class WikiProcessor {
 
     public static List<PackedWikiPage> deserialize(ByteBuffer input) {
         ByteBuffer buffer = input.duplicate();
+        int versionNumber = buffer.getInt();
+        if (versionNumber != VERSION_NUMBER) {
+            throw new IllegalArgumentException(
+                    String.format("Magic cookie %d did not match the expected %d", versionNumber, VERSION_NUMBER));
+        }
         int count = Ints.checkedCast(buffer.getLong());
         List<PackedWikiPage> pages = Lists.newArrayListWithCapacity(count);
-        for (int i = 0, offset = Long.BYTES; i < count; i++) {
+        for (int i = 0, offset = buffer.position(); i < count; i++) {
             PackedWikiPage newPage = new PackedWikiPage(buffer, offset);
             pages.add(newPage);
             offset += newPage.getLength();
@@ -180,8 +181,21 @@ public class WikiProcessor {
         return pages;
     }
 
+
+    public static void serialize(List<PackedWikiPage> graph, ByteBuffer output) throws IOException {
+        ByteBuffer buffer = ByteBuffer.allocate(Integer.BYTES + Long.BYTES);
+        buffer.putInt(VERSION_NUMBER);
+        buffer.putLong(graph.size());
+        buffer.flip();
+        output.put(buffer);
+        for (PackedWikiPage packedWikiPage : graph) {
+            packedWikiPage.writeTo(output);
+        }
+    }
+
     public static void serialize(List<PackedWikiPage> graph, WritableByteChannel channel) throws IOException {
         // Format:
+        // i32: magic bytes
         // i64: article_count
         // article_count repeats:
         //   i64 article_id
@@ -191,8 +205,10 @@ public class WikiProcessor {
         //   i32 title_byte_size
         //     title_byte_size repeats:
         //     i8 title_byte
-        ByteBuffer buffer = ByteBuffer.allocate(Long.BYTES);
-        buffer.putLong(0, graph.size());
+        ByteBuffer buffer = ByteBuffer.allocate(Integer.BYTES + Long.BYTES);
+        buffer.putInt(VERSION_NUMBER);
+        buffer.putLong(graph.size());
+        buffer.flip();
         channel.write(buffer);
         for (PackedWikiPage packedWikiPage : graph) {
             packedWikiPage.writeTo(channel);

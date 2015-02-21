@@ -7,7 +7,6 @@ import org.junit.Test;
 
 import java.io.BufferedInputStream;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Field;
@@ -22,7 +21,7 @@ import static org.hamcrest.MatcherAssert.*;
 
 public class WikiLinksTest {
 
-    @Test
+//    @Test
     public void marshalledAndUnmarshalledEqualsParsed() throws IOException {
         String filePath = "src/data/simplewiki-20141222-pages-meta-current.xml";
         InputStream in = new FileInputStream(filePath);
@@ -89,7 +88,19 @@ public class WikiLinksTest {
 
     @Test
     public void itPacksPagesCorrectly() throws Exception {
-        PagePointer[] pointers = new PagePointer[4];
+        Map<String, PagePointer> map = createSimpleDenseGraph(4, "title_");
+        assertThat(map.size(), is(equalTo(4)));
+        List<PackedWikiPage> packedWikiPages = WikiProcessor.packPages(map);
+        for (int i = 0; i < map.size(); i++) {
+            PackedWikiPage page = packedWikiPages.get(i);
+            assertThat(page.getId(), is(equalTo(Long.valueOf(i))));
+            assertThat(page.getTitle(), is(equalTo("title_" + i)));
+            assertThat(page.getLength(), is(equalTo(getLength(page))));
+        }
+    }
+
+    private static Map<String, PagePointer> createSimpleDenseGraph(int size, String titlePrefix) {
+        PagePointer[] pointers = new PagePointer[size];
         for (int i = 0; i < pointers.length; i++) {
             pointers[i] = new PagePointer(null);
         }
@@ -100,18 +111,34 @@ public class WikiLinksTest {
                 if (i == j) continue;
                 pagePointers.add(pointers[j]);
             }
-            String title = "title_" + i;
+            String title = titlePrefix + i;
             pointers[i].page = new WikiPageData(title, i, pagePointers);
             map.put(title, pointers[i]);
         }
-        assertThat(map.size(), is(equalTo(4)));
-        List<PackedWikiPage> packedWikiPages = WikiProcessor.packPages(map);
-        for (int i = 0; i < pointers.length; i++) {
-            PackedWikiPage page = packedWikiPages.get(i);
-            assertThat(page.getId(), is(equalTo(Long.valueOf(i))));
-            assertThat(page.getTitle(), is(equalTo("title_" + i)));
-            assertThat(page.getLength(), is(equalTo(getLength(page))));
+        return map;
+    }
+
+    @Test
+    public void deserializeEqualsUnserialized() throws IOException {
+        final String prefix = "foo_title_";
+        List<PackedWikiPage> readFromXml = WikiProcessor.packPages(createSimpleDenseGraph(512, prefix));
+        ByteArrayListChannel channel = new ByteArrayListChannel();
+        List<PackedWikiPage> read = readFromXml;
+        for (int i = 0; i < 5; i++) {
+            WikiProcessor.serialize(read, channel);
+            ByteBuffer input = ByteBuffer.wrap(channel.byteArrayList.buffer, 0, channel.byteArrayList.elementsCount);
+            read = WikiProcessor.deserialize(input);
         }
+
+        assertThat(read.size(), is(readFromXml.size()));
+        for (int i = 0; i < read.size(); i++) {
+            PackedWikiPage fromXml = readFromXml.get(i);
+            PackedWikiPage deserialized = read.get(i);
+            assertThat(deserialized.getTitle(), is(equalTo(fromXml.getTitle())));
+            assertThat(deserialized.getTitle(), startsWith(prefix));
+            assertThat(deserialized, is(equalTo(fromXml)));
+        }
+
     }
 
     private int getLength(PackedWikiPage page) throws NoSuchFieldException, IllegalAccessException {
