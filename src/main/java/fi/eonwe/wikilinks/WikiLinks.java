@@ -130,16 +130,17 @@ public class WikiLinks {
         FileOutputStream fos = null;
         if (outputFile != null) {
             if (outputFile.exists()) {
-                System.err.printf("File %s already exists. Exiting", outputFile);
+                System.err.printf("File %s already exists. Exiting%n", outputFile);
                 System.exit(1);
             }
             fos = getOutputStream(outputFile);
             if (fos == null) {
-                System.err.printf("Cannot open file %s for writing. Exiting", outputFile);
+                System.err.printf("Cannot open file %s for writing. Exiting%n", outputFile);
                 System.exit(1);
             }
         }
         long loadStart = System.currentTimeMillis();
+        System.out.printf("Staring to read %s%n", inputFile);
         List<PackedWikiPage> pages;
         if (loadXml) {
             pages = readXml(input);
@@ -153,6 +154,8 @@ public class WikiLinks {
             try {
                 WikiProcessor.serialize(pages, fos.getChannel());
                 fos.getFD().sync();
+                fos.flush();
+                fos.close();
             } catch (IOException e) {
                 System.err.printf("Encountered an error %s%n", e.getMessage());
                 System.out.printf("Finished in %d ms%n", System.currentTimeMillis() - writeStart);
@@ -163,8 +166,8 @@ public class WikiLinks {
         if (interactive) {
             System.out.println("Staring interactive mode");
             WikiRoutes routes = new WikiRoutes(pages);
-            String[] names = routes.getNames();
-            routes.findRoute("April", "May");
+            System.out.println(routes.listLinks("April"));
+            System.out.println(routes.findRoute("April", "May"));
         }
     }
 

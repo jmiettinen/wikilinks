@@ -1,21 +1,25 @@
 package fi.eonwe.wikilinks;
 
 import com.carrotsearch.hppc.ByteArrayList;
+import com.carrotsearch.hppc.LongOpenHashSet;
+import com.carrotsearch.hppc.LongSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import org.junit.Test;
 
 import java.io.BufferedInputStream;
+import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
 import java.nio.channels.WritableByteChannel;
 import java.util.List;
 import java.util.Map;
 
-import static java.util.function.Predicate.isEqual;
 import static org.hamcrest.CoreMatchers.*;
 import static org.hamcrest.MatcherAssert.*;
 
@@ -100,6 +104,10 @@ public class WikiLinksTest {
     }
 
     private static Map<String, PagePointer> createSimpleDenseGraph(int size, String titlePrefix) {
+        return createSimpleDenseGraph(size, titlePrefix, false);
+    }
+
+    private static Map<String, PagePointer> createSimpleDenseGraph(int size, String titlePrefix, boolean duplicates) {
         PagePointer[] pointers = new PagePointer[size];
         for (int i = 0; i < pointers.length; i++) {
             pointers[i] = new PagePointer(null);
@@ -107,15 +115,29 @@ public class WikiLinksTest {
         Map<String, PagePointer> map = Maps.newHashMap();
         for (int i = 0; i < pointers.length; i++) {
             List<PagePointer> pagePointers = Lists.newArrayList();
-            for (int j = pointers.length - 1; j >= 0; j--) {
-                if (i == j) continue;
-                pagePointers.add(pointers[j]);
+            for (int repeat = 0; repeat < (duplicates ? 2 : 1); repeat++) {
+                for (int j = pointers.length - 1; j >= 0; j--) {
+                    if (i == j) continue;
+                    pagePointers.add(pointers[j]);
+                }
             }
             String title = titlePrefix + i;
             pointers[i].page = new WikiPageData(title, i, pagePointers);
             map.put(title, pointers[i]);
         }
         return map;
+    }
+
+    @Test
+    public void packingRemovesDuplicates() {
+        final String prefix = "foo_title_";
+        List<PackedWikiPage> readFromXml = WikiProcessor.packPages(createSimpleDenseGraph(4, prefix, true));
+        readFromXml.forEach(p -> {
+            long[] links = p.getLinks();
+            LongOpenHashSet set = new LongOpenHashSet();
+            set.add(links);
+            assertThat(links.length, is(equalTo(set.size())));
+        });
     }
 
     @Test
@@ -138,8 +160,32 @@ public class WikiLinksTest {
             assertThat(deserialized.getTitle(), startsWith(prefix));
             assertThat(deserialized, is(equalTo(fromXml)));
         }
-
     }
+
+    @Test
+    public void deserializeEqualsUnserializedDisk() throws IOException {
+        File tmpFile = File.createTempFile("disk-serialization-test", "tmp");
+        tmpFile.deleteOnExit();
+        final String prefix = "foo_title_";
+        List<PackedWikiPage> readFromXml = WikiProcessor.packPages(createSimpleDenseGraph(512, prefix));
+        FileOutputStream fos = new FileOutputStream(tmpFile);
+        WikiProcessor.serialize(readFromXml, fos.getChannel());
+        fos.close();
+        FileInputStream fin = new FileInputStream(tmpFile);
+        FileChannel fc = fin.getChannel();
+        long size = fc.size();
+        List<PackedWikiPage> readFromFile = WikiProcessor.deserialize(fc.map(FileChannel.MapMode.READ_ONLY, 0, size));
+
+        assertThat(readFromFile.size(), is(readFromXml.size()));
+        for (int i = 0; i < readFromXml.size(); i++) {
+            PackedWikiPage fromXml = readFromXml.get(i);
+            PackedWikiPage deserialized = readFromFile.get(i);
+            assertThat(deserialized.getTitle(), is(equalTo(fromXml.getTitle())));
+            assertThat(deserialized.getTitle(), startsWith(prefix));
+            assertThat(deserialized, is(equalTo(fromXml)));
+        }
+    }
+
 
     private int getLength(PackedWikiPage page) throws NoSuchFieldException, IllegalAccessException {
         Field f = page.getClass().getDeclaredField("data");

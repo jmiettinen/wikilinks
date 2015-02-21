@@ -1,13 +1,16 @@
 package fi.eonwe.wikilinks;
 
+import com.carrotsearch.hppc.LongArrayList;
 import com.carrotsearch.hppc.LongIntMap;
 import com.carrotsearch.hppc.LongIntOpenHashMap;
 import com.google.common.base.Charsets;
 import com.google.common.collect.Lists;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
  */
@@ -15,18 +18,61 @@ public class WikiRoutes {
 
     private final List<PackedWikiPage> pages;
     private final LongIntMap idIndexMap;
-    private final NameHelper[] sortedNames;
+    private final PackedNameHelper[] sortedNames;
+    private final String[] names;
 
     public WikiRoutes(List<PackedWikiPage> pages) {
         this.pages = pages;
         this.idIndexMap = constructIdIndexMap(pages);
         this.sortedNames = constructSortedNames(pages);
+        this.names = Arrays.stream(sortedNames).map(p -> p.getTitle()).limit(500).toArray(String[]::new);
     }
 
     public List<String> findRoute(String startPage, String endPage) {
-        List<String> pages = Lists.newArrayList();
+        return findRoute(getIndex(startPage), getIndex(endPage));
+    }
 
-        return pages;
+    private int findNameIndex(String name) {
+        return Arrays.binarySearch(Arrays.stream(sortedNames).map(p -> p.getTitle()).toArray(String[]::new), name);
+    }
+
+    public List<String> findRandomRoute() {
+        ThreadLocalRandom rng = ThreadLocalRandom.current();
+        if (sortedNames.length == 1) {
+            return Lists.newArrayList(sortedNames[0].getTitle());
+        } else if (sortedNames.length == 0) {
+            return Collections.emptyList();
+        }
+        int startIx = rng.nextInt(sortedNames.length);
+        int endIx;
+        do {
+            endIx = rng.nextInt(sortedNames.length);
+        } while (endIx == startIx);
+        return findRoute(startIx, endIx);
+    }
+
+    public List<String> listLinks(String name) {
+        int index = getIndex(name);
+        if (index < 0) return Collections.emptyList();
+        return Arrays.asList(Arrays.stream(pages.get(index).getLinks()).mapToObj(id -> {
+            int idIndex = idIndexMap.getOrDefault(id, -1);
+            if (idIndex >= 0) {
+                return pages.get(idIndex).getTitle();
+            } else {
+                return null;
+            }
+        }).filter(s -> s != null).toArray(String[]::new));
+    }
+
+    private List<String> findRoute(int start, int end) {
+        PackedWikiPage startPage = sortedNames[start].page;
+        PackedWikiPage endPage = sortedNames[end].page;
+        LongArrayList route = RouteFinder.find(startPage.getId(), endPage.getId(), pages, idIndexMap);
+        List<String> path = Arrays.asList(Arrays.stream(route.toArray()).mapToObj(id -> {
+            int index = idIndexMap.getOrDefault(id, -1);
+            return pages.get(index).getTitle();
+        }).toArray(String[]::new));
+        return path;
     }
 
     private static LongIntMap constructIdIndexMap(List<PackedWikiPage> pages) {
@@ -37,20 +83,14 @@ public class WikiRoutes {
         return map;
     }
 
-    private static NameHelper[] constructSortedNames(List<PackedWikiPage> pages) {
-        NameHelper[] names = pages.stream().map(PackedNameHelper::new).toArray(NameHelper[]::new);
+    private static PackedNameHelper[] constructSortedNames(List<PackedWikiPage> pages) {
+        PackedNameHelper[] names = pages.stream().map(PackedNameHelper::new).toArray(PackedNameHelper[]::new);
         Arrays.sort(names, COMP);
         return names;
     }
 
-    public String[] getNames() {
-        return Arrays.stream(sortedNames).map(NameHelper::getTitle).toArray(String[]::new);
-    }
-
     private static interface NameHelper {
-
         String getTitle();
-
     }
 
     private static Comparator<NameHelper> COMP = new Comparator<NameHelper>() {
@@ -86,6 +126,16 @@ public class WikiRoutes {
         return 0;
     }
 
+    private int getIndex(String name) {
+        int ix = Arrays.binarySearch(sortedNames, new StringNameHelper(name), COMP);
+        if (ix < 0) return -1;
+        return ix;
+    }
+
+    public boolean hasPage(String title) {
+        return getIndex(title) >= 0;
+    }
+
     private static class StringNameHelper implements NameHelper {
         private final byte[] bytes;
 
@@ -109,6 +159,23 @@ public class WikiRoutes {
         @Override
         public String getTitle() {
             return page.getTitle();
+        }
+    }
+
+    public static class BadRouteException extends Exception {
+
+        private final boolean startDoesNotExist;
+        private final boolean endDoesNotExist;
+
+        private final String startName;
+        private final String endName;
+
+
+        public BadRouteException(boolean startDoesNotExist, boolean endDoesNotExist, String startName, String endName) {
+            this.startDoesNotExist = startDoesNotExist;
+            this.endDoesNotExist = endDoesNotExist;
+            this.startName = startName;
+            this.endName = endName;
         }
     }
 

@@ -1,5 +1,6 @@
 package fi.eonwe.wikilinks;
 
+import com.carrotsearch.hppc.procedures.LongProcedure;
 import com.google.common.base.Charsets;
 
 import java.io.IOException;
@@ -69,17 +70,29 @@ public class PackedWikiPage {
         if (data.hasArray()) {
             dataArray = data.array();
             offset += data.arrayOffset();
+            return new String(dataArray, offset, stringSize, Charsets.UTF_8);
         } else {
             dataArray = new byte[stringSize];
-            offset = 0;
-            data.duplicate().get(dataArray, offset, stringSize);
+            ByteBuffer copy = data.duplicate();
+            copy.position(offset);
+            copy.get(dataArray);
+            return new String(dataArray, 0, stringSize, Charsets.UTF_8);
         }
-        return new String(dataArray, offset, stringSize, Charsets.UTF_8);
     }
 
     public long getId() { return data.getLong(offset); }
 
     public long[] getLinks() { return getLinks(data, offset); }
+
+    public <T extends LongProcedure> T forEachLink(T procedure) {
+        int linkCount = data.getInt(offset + LINK_SIZE_OFFSET);
+        if (linkCount != 0) {
+            for (int currentOffset = this.offset + LINKS_OFFSET, i = 0; i < linkCount; i++, currentOffset += Long.BYTES) {
+                procedure.apply(data.getLong(currentOffset));
+            }
+        }
+        return procedure;
+    }
 
     public String getTitle() { return getTitle(data, offset); }
 
@@ -96,7 +109,7 @@ public class PackedWikiPage {
         int stringSize = data.getInt(stringSizeOffset);
         int lenComp = Integer.compare(stringSize, title.length);
         if (lenComp != 0) return lenComp;
-        final int stringOffset = offset + stringSizeOffset + Integer.BYTES;
+        final int stringOffset = stringSizeOffset + Integer.BYTES;
         for (int i = 0; i < title.length; i++) {
             int comp = Byte.compare(data.get(stringOffset + i), title[i]);
             if (comp != 0) return comp;
@@ -118,9 +131,12 @@ public class PackedWikiPage {
         int otherStringSize = d2.getInt(otherStringSizeOffset);
         int lenComp = Integer.compare(thiStringSize, otherStringSize);
         if (lenComp != 0) return lenComp;
+
+        int thisStringOffset = thisStringSizeOffset + Integer.BYTES;
+        int thisOtherOffset = otherStringSizeOffset + Integer.BYTES;
         for (int i = 0; i < thiStringSize; i++) {
-            byte thisByte = d1.get(thisStringSizeOffset + i);
-            byte otherByte = d2.get(otherStringSizeOffset + i);
+            byte thisByte = d1.get(thisStringOffset + i);
+            byte otherByte = d2.get(thisOtherOffset + i);
             int comp = Byte.compare(thisByte, otherByte);
             if (comp != 0) return comp;
         }

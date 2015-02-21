@@ -34,7 +34,9 @@ public class WikiProcessor {
     public static List<PackedWikiPage> readPages(InputStream input) {
         WikiProcessor processor = new WikiProcessor();
         Map<String, PagePointer> pages = processor.preProcess(input);
+//        printStatistics(pages);
         WikiProcessor.resolveRedirects(pages);
+//        printStatistics(pages);
         List<PackedWikiPage> packedPages = WikiProcessor.packPages(pages);
         return packedPages;
     }
@@ -51,32 +53,21 @@ public class WikiProcessor {
                         WikiPage page;
                         if (matcher.isRedirect()) {
                             page = new WikiRedirectPage(article.getTitle(), id, matcher.getRedirectText());
-                            PagePointer pointer = titleToPage.get(page.getTitle());
-                            if (pointer != null) {
-                                pointer.page = page;
-                            } else {
-                                pointer = new PagePointer(page);
-                                titleToPage.put(page.getTitle(), pointer);
-                            }
+                            fixPagePointers(titleToPage, page);
                         } else {
                             List<String> links = matcher.getLinks();
                             List<PagePointer> pointerLinks = Lists.newArrayList();
                             for (String link : links) {
-                                PagePointer ptr = titleToPage.get(link);
+                                String capitalizedLink = possiblyCapitalize(link);
+                                PagePointer ptr = titleToPage.get(capitalizedLink);
                                 if (ptr == null) {
                                     ptr = new PagePointer(null);
-                                    titleToPage.put(link, ptr);
+                                    titleToPage.put(capitalizedLink, ptr);
                                 }
                                 pointerLinks.add(ptr);
                             }
                             page = new WikiPageData(article.getTitle(), id, pointerLinks);
-                            PagePointer pointer = titleToPage.get(page.getTitle());
-                            if (pointer != null) {
-                                pointer.page = page;
-                            } else {
-                                pointer = new PagePointer(page);
-                                titleToPage.put(page.getTitle(), pointer);
-                            }
+                            fixPagePointers(titleToPage, page);
                         }
                     }
                 }
@@ -85,6 +76,25 @@ public class WikiProcessor {
             return titleToPage;
         } catch (SAXException | IOException e) {
             return Collections.emptyMap();
+        }
+    }
+
+    private static String possiblyCapitalize(String linkName) {
+        if (linkName.length() != 0 && !Character.isUpperCase(linkName.charAt(0))) {
+            char[] chars = linkName.toCharArray();
+            chars[0] = Character.toUpperCase(chars[0]);
+            return new String(chars);
+        }
+        return linkName;
+    }
+
+    private static void fixPagePointers(Map<String, PagePointer> titleToPage, WikiPage page) {
+        PagePointer pointer = titleToPage.get(page.getTitle());
+        if (pointer != null) {
+            pointer.page = page;
+        } else {
+            pointer = new PagePointer(page);
+            titleToPage.put(page.getTitle(), pointer);
         }
     }
 
@@ -152,7 +162,7 @@ public class WikiProcessor {
             Map.Entry<String, PagePointer> entry = iterator.next();
             WikiPageData page = (WikiPageData) entry.getValue().page;
             if (page != null) {
-                long[] links = page.getLinks().stream().filter(p -> p.page != null).mapToLong(p -> p.page.getId()).toArray();
+                long[] links = page.getLinks().stream().filter(p -> p.page != null).mapToLong(p -> p.page.getId()).distinct().toArray();
                 Arrays.sort(links);
                 if (links.length == 0) links = EMPTY_ARRAY;
                 PackedWikiPage packedPage = new PackedWikiPage(page.getId(), links, entry.getKey());
