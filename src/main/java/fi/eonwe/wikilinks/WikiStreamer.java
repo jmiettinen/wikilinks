@@ -1,75 +1,33 @@
 package fi.eonwe.wikilinks;
 
-import com.google.common.collect.ImmutableList;
-import fi.eonwe.wikilinks.jaxb.MediaWikiType;
-import fi.eonwe.wikilinks.jaxb.PageType;
 import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream;
 
-import javax.xml.bind.JAXBContext;
-import javax.xml.bind.JAXBElement;
-import javax.xml.bind.JAXBException;
-import javax.xml.bind.Unmarshaller;
 import javax.xml.stream.XMLInputFactory;
 import javax.xml.stream.XMLStreamConstants;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamReader;
-import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.Collections;
+import java.util.HashSet;
 import java.util.Iterator;
-import java.util.List;
 import java.util.NoSuchElementException;
 
 /**
  */
 public class WikiStreamer {
 
+    private static String[] EMPTY = new String[0];
+
     public static InputStream fromBunzipStream(InputStream bunzipStream) throws IOException {
         BZip2CompressorInputStream stream = new BZip2CompressorInputStream(bunzipStream, true);
         return stream;
     }
 
-    private static final ThreadLocal<JAXBContext> JAXB_CONTEXT_THREAD_LOCAL = new ThreadLocal<JAXBContext>() {
-        @Override
-        protected JAXBContext initialValue() {
-            try {
-                return JAXBContext.newInstance("fi.eonwe.wikilinks.jaxb");
-            } catch (JAXBException e) {
-                throw new AssertionError(e);
-            }
-        }
-    };
-
-
-    public static JAXBContext getJAXB() {
-        return JAXB_CONTEXT_THREAD_LOCAL.get();
-    }
-
-    public static Unmarshaller getUnmarshaller() {
-        try {
-            return JAXB_CONTEXT_THREAD_LOCAL.get().createUnmarshaller();
-        } catch (JAXBException e) {
-            throw new AssertionError(e);
-        }
-    }
-
-    public static Iterable<PageType> readFrom(InputStream stream) {
-        Unmarshaller unmarshaller = getUnmarshaller();
-        try {
-            JAXBElement root = (JAXBElement) unmarshaller.unmarshal(stream);
-            return ((MediaWikiType) root.getValue()).getPage();
-        } catch (JAXBException e) {
-            e.printStackTrace(System.err);
-            return Collections.emptyList();
-        }
-    }
-
-    private static Iterator<WikiPage> streamFrom(XMLStreamReader reader) {
-        return new Iterator<WikiPage>() {
+    private static Iterator<WikiPageData> streamFrom(XMLStreamReader reader) {
+        return new Iterator<WikiPageData>() {
 
             private boolean advanced = false;
-            private WikiPage page = null;
+            private WikiPageData page = null;
 
             @Override
             public boolean hasNext() {
@@ -78,11 +36,11 @@ public class WikiStreamer {
             }
 
             @Override
-            public WikiPage next() {
+            public WikiPageData next() {
                 if (!hasNext()) {
                     throw new NoSuchElementException("out of elements");
                 }
-                WikiPage toReturn = page;
+                WikiPageData toReturn = page;
                 advance();
                 return toReturn;
             }
@@ -92,7 +50,9 @@ public class WikiStreamer {
                 String title = null;
                 long id = -1;
                 long ns = -1;
-                ImmutableList<String> links = null;
+                String[] links = null;
+                LinkExtractor extractor = new LinkExtractor();
+
                 try {
                     while(reader.hasNext()) {
                         final int eventType = reader.next();
@@ -102,13 +62,13 @@ public class WikiStreamer {
                                 case "title": title = reader.getElementText(); break;
                                 case "id": id = Long.parseLong(reader.getElementText()); break;
                                 case "ns": ns = Long.parseLong(reader.getElementText()); break;
-                                case "text": links = getLinks(reader.getElementText()); break;
+                                case "text": links = getLinks(extractor, reader.getElementText()); break;
                             }
                         } else if (eventType == XMLStreamConstants.END_ELEMENT && "page".equals(reader.getLocalName())) {
                             assert title != null;
                             assert id != -1;
                             assert ns != -1;
-                            page = new WikiPage(title, id, ns, links);
+//                            page = new WikiPageData(title, id, links);
                             advanced = true;
                             break;
                         } else if (eventType == XMLStreamConstants.END_DOCUMENT) {
@@ -129,11 +89,22 @@ public class WikiStreamer {
         };
     }
 
-    private static ImmutableList<String> getLinks(String wikiText) {
-        return ImmutableList.of();
+    private static String[] getLinks(LinkExtractor le, String wikiText) {
+        le.resetTo(wikiText);
+        HashSet<String> links = null;
+        while (le.advance()) {
+            String target = le.getTitle();
+            String namespace = le.getNamespace();
+            if (namespace == null || "Wikipedia".equals(namespace)) {
+                if (links == null) links = new HashSet<>();
+                links.add(target);
+            }
+        }
+        if (links == null) return EMPTY;
+        return links.toArray(new String[links.size()]);
     }
 
-    public static Iterable<WikiPage> streamFrom(InputStream is) throws XMLStreamException {
+    public static Iterable<WikiPageData> streamFrom(InputStream is) throws XMLStreamException {
         XMLStreamReader reader = XMLInputFactory.newInstance().createXMLStreamReader(is);
         assert reader.getEventType() == XMLStreamConstants.START_DOCUMENT;
         return () -> streamFrom(reader);

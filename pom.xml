@@ -32,6 +32,27 @@
             <artifactId>guava</artifactId>
             <version>18.0</version>
         </dependency>
+        <dependency>
+            <groupId>info.bliki.wiki</groupId>
+            <artifactId>bliki-core</artifactId>
+            <version>3.0.19</version>
+        </dependency>
+        <dependency>
+            <groupId>com.carrotsearch</groupId>
+            <artifactId>hppc</artifactId>
+            <version>0.6.0</version>
+        </dependency>
+        <dependency>
+            <groupId>net.openhft</groupId>
+            <artifactId>koloboke-api-jdk8</artifactId>
+            <version>0.6.6</version>
+        </dependency>
+        <dependency>
+            <groupId>net.openhft</groupId>
+            <artifactId>koloboke-impl-jdk8</artifactId>
+            <version>0.6.6</version>
+            <scope>runtime</scope>
+        </dependency>
     </dependencies>
 
     <build>
@@ -45,27 +66,6 @@
                     <target>1.8</target>
                     <debug>true</debug>
                     <encoding>UTF-8</encoding>
-                </configuration>
-            </plugin>
-            <plugin>
-                <groupId>org.jvnet.jaxb2.maven2</groupId>
-                <artifactId>maven-jaxb2-plugin</artifactId>
-                <version>0.11.0</version>
-                <executions>
-                    <execution>
-                        <goals>
-                            <goal>generate</goal>
-                        </goals>
-                    </execution>
-                </executions>
-                <configuration>
-                    <generateDirectory>${basedir}/src/main/generated-sources</generateDirectory>
-                    <generatePackage>fi.eonwe.wikilinks.jaxb</generatePackage>
-                    <episode>false</episode>
-                    <readOnly>true</readOnly>
-                    <!--<debug>true</debug>-->
-                    <!--<verbose>true</verbose>-->
-                    <accessExternalDTD>none</accessExternalDTD>
                 </configuration>
             </plugin>
             <plugin>
