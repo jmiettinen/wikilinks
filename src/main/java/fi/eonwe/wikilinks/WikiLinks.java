@@ -166,8 +166,8 @@ public class WikiLinks {
         if (interactive) {
             System.out.println("Staring interactive mode");
             WikiRoutes routes = new WikiRoutes(pages);
-            System.out.println(routes.listLinks("April"));
             System.out.println(routes.findRoute("April", "May"));
+            System.out.println(routes.findRoute("April", "Ice cream"));
         }
     }
 

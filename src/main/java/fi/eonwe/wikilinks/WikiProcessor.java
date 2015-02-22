@@ -168,7 +168,7 @@ public class WikiProcessor {
                 PackedWikiPage packedPage = new PackedWikiPage(page.getId(), links, entry.getKey());
                 list.add(packedPage);
             }
-            iterator.remove();
+//            iterator.remove();
         }
         list.sort((a,b) -> Long.compare(a.getId(), b.getId()));
         return list;

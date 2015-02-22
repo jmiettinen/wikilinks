@@ -7,7 +7,7 @@ class PagePointer {
     private static int counter = 0;
 
     public WikiPage page;
-    private final int id = counter++;
+    public final int id = counter++;
 
     public PagePointer(WikiPage page) {
         this.page = page;

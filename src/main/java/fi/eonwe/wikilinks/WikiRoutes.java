@@ -3,6 +3,7 @@ package fi.eonwe.wikilinks;
 import com.carrotsearch.hppc.LongArrayList;
 import com.carrotsearch.hppc.LongIntMap;
 import com.carrotsearch.hppc.LongIntOpenHashMap;
+import com.carrotsearch.hppc.procedures.LongProcedure;
 import com.google.common.base.Charsets;
 import com.google.common.collect.Lists;
 
@@ -54,21 +55,21 @@ public class WikiRoutes {
     public List<String> listLinks(String name) {
         int index = getIndex(name);
         if (index < 0) return Collections.emptyList();
-        return Arrays.asList(Arrays.stream(pages.get(index).getLinks()).mapToObj(id -> {
+        List<String> names = Lists.newArrayList();
+        pages.get(index).forEachLink(id -> {
             int idIndex = idIndexMap.getOrDefault(id, -1);
             if (idIndex >= 0) {
-                return pages.get(idIndex).getTitle();
-            } else {
-                return null;
+                names.add(pages.get(idIndex).getTitle());
             }
-        }).filter(s -> s != null).toArray(String[]::new));
+        });
+        return names;
     }
 
     private List<String> findRoute(int start, int end) {
-        PackedWikiPage startPage = sortedNames[start].page;
-        PackedWikiPage endPage = sortedNames[end].page;
-        LongArrayList route = RouteFinder.find(startPage.getId(), endPage.getId(), pages, idIndexMap);
-        List<String> path = Arrays.asList(Arrays.stream(route.toArray()).mapToObj(id -> {
+        PackedWikiPage startPage = pages.get(start);
+        PackedWikiPage endPage = pages.get(end);
+        long[] route = RouteFinder.find(startPage.getId(), endPage.getId(), pages, idIndexMap);
+        List<String> path = Arrays.asList(Arrays.stream(route).mapToObj(id -> {
             int index = idIndexMap.getOrDefault(id, -1);
             return pages.get(index).getTitle();
         }).toArray(String[]::new));
@@ -129,7 +130,7 @@ public class WikiRoutes {
     private int getIndex(String name) {
         int ix = Arrays.binarySearch(sortedNames, new StringNameHelper(name), COMP);
         if (ix < 0) return -1;
-        return ix;
+        return idIndexMap.getOrDefault(sortedNames[ix].page.getId(), -1);
     }
 
     public boolean hasPage(String title) {

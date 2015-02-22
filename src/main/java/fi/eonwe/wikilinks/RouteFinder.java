@@ -5,17 +5,20 @@ import com.carrotsearch.hppc.LongIntMap;
 import com.carrotsearch.hppc.LongObjectMap;
 import com.carrotsearch.hppc.LongObjectOpenHashMap;
 import com.carrotsearch.hppc.procedures.LongProcedure;
+import com.google.common.primitives.Longs;
 import org.jgrapht.util.FibonacciHeap;
 import org.jgrapht.util.FibonacciHeapNode;
 
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 /**
  */
 public class RouteFinder {
 
-    private final FibonacciHeap<PackedWikiPage> heap;
-    private final LongObjectMap<FibonacciHeapNode<PackedWikiPage>> nodes = new LongObjectOpenHashMap<>();
+    private final FibonacciHeap<RouteData> heap;
+    private final LongObjectMap<FibonacciHeapNode<RouteData>> nodes = new LongObjectOpenHashMap<>();
     private final LongIntMap idIndexMap;
     private final List<PackedWikiPage> graph;
     private final long startId;
@@ -26,20 +29,19 @@ public class RouteFinder {
         this.idIndexMap = idIndexMap;
         this.startId = startId;
         this.endId = endId;
-        this.heap = setup(startId, graph);
+        this.heap = new FibonacciHeap<>();
+        setup(startId);
     }
 
-    public static LongArrayList find(long startId, long endId, List<PackedWikiPage> graph, LongIntMap idIndexMap) {
+    public static long[] find(long startId, long endId, List<PackedWikiPage> graph, LongIntMap idIndexMap) {
         RouteFinder finder = new RouteFinder(startId, endId, graph, idIndexMap);
-        LongArrayList route = finder.find();
+        long[] route = finder.find();
         return route;
     }
 
-    private FibonacciHeap<PackedWikiPage> setup(long startId, List<PackedWikiPage> graph) {
-        FibonacciHeap<PackedWikiPage> heap = new FibonacciHeap<>();
-        FibonacciHeapNode<PackedWikiPage> node = new FibonacciHeapNode<>(forId(startId), 0.0);
-        heap.insert(node, node.getKey());
-        return heap;
+    private void setup(long startId) {
+        FibonacciHeapNode<RouteData> node = getNode(startId);
+        heap.insert(node, 0.0);
     }
 
     private PackedWikiPage forId(long id) {
@@ -48,29 +50,53 @@ public class RouteFinder {
         return graph.get(index);
     }
 
-    private LongArrayList find() {
-        LongArrayList route = new LongArrayList();
+    private static class RouteData {
+        public RouteData prev;
+        public final PackedWikiPage page;
+
+        private RouteData(PackedWikiPage page) {
+            this.page = page;
+        }
+    }
+
+    private FibonacciHeapNode<RouteData> getNode(long articleId) {
+        FibonacciHeapNode<RouteData> node = nodes.getOrDefault(articleId, null);
+        if (node == null) {
+            node = new FibonacciHeapNode<>(new RouteData(forId(articleId)), Double.POSITIVE_INFINITY);
+            nodes.put(articleId, node);
+            heap.insert(node, node.getKey());
+        }
+        return node;
+    }
+
+    private long[] find() {
         while (!heap.isEmpty()) {
-            FibonacciHeapNode<PackedWikiPage> min = heap.removeMin();
+            FibonacciHeapNode<RouteData> min = heap.removeMin();
             final double distance = min.getKey();
-            route.add(min.getData().getId());
-            if (min.getData().getId() == endId) break;
-            min.getData().forEachLink(new LongProcedure() {
-                @Override
-                public void apply(long linkTarget) {
-                    FibonacciHeapNode<PackedWikiPage> node = nodes.getOrDefault(linkTarget, null);
-                    final double newDistance = distance + 1.0;
-                    if (node == null) {
-                        node = new FibonacciHeapNode<>(forId(linkTarget), newDistance);
-                        nodes.put(linkTarget, node);
-                        heap.insert(node, node.getKey());
-                    } else if (node.getKey() > newDistance) {
-                        heap.decreaseKey(node, newDistance);
-                    }
+            PackedWikiPage page = min.getData().page;
+            if (page.getId() == endId) return recordRoute(min.getData());
+            page.forEachLink(linkTarget -> {
+                FibonacciHeapNode<RouteData> node = getNode(linkTarget);
+                final double newDistance = distance + 1.0;
+                if (newDistance < node.getKey()) {
+                    heap.decreaseKey(node, newDistance);
+                    node.getData().prev = min.getData();
                 }
             });
         }
-        return route;
+        return new long[0];
+    }
+
+    private long[] recordRoute(RouteData endPoint) {
+        LongArrayList list = new LongArrayList();
+        RouteData cur = endPoint;
+        while (cur != null) {
+            list.add(cur.page.getId());
+            cur = cur.prev;
+        }
+        List<Long> listlist =  Longs.asList(list.toArray());
+        Collections.reverse(listlist);
+        return Longs.toArray(listlist);
     }
 
 
