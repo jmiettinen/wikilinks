@@ -15,10 +15,10 @@ public class WikiPageData implements WikiPage {
 
     private final String title;
     private final long id;
-    private final List<PagePointer> links;
+    private final PagePointer[] links;
 //    private final byte[] links;
 
-    public WikiPageData(String title, long id, List<PagePointer> links) {
+    public WikiPageData(String title, long id, PagePointer[] links) {
         this.title = title;
         this.id = id;
         this.links = links;
@@ -61,5 +61,5 @@ public class WikiPageData implements WikiPage {
 
     public long getId() { return id; }
     public String getTitle() { return title; }
-    public List<PagePointer> getLinks() { return links; }
+    public PagePointer[] getLinks() { return links; }
 }

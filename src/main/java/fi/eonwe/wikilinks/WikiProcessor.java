@@ -60,21 +60,21 @@ public class WikiProcessor {
                         long id = Long.parseLong(article.getId());
                         WikiPage page;
                         if (matcher.isRedirect()) {
-                            page = new WikiRedirectPage(article.getTitle(), id, matcher.getRedirectText());
+                            page = new WikiRedirectPage(article.getTitle().intern(), id, matcher.getRedirectText().intern());
                             fixPagePointers(titleToPage, page);
                         } else {
-                            List<String> links = matcher.getLinks();
-                            List<PagePointer> pointerLinks = Lists.newArrayList();
-                            for (String link : links) {
-                                String capitalizedLink = possiblyCapitalize(link);
-                                PagePointer ptr = titleToPage.get(capitalizedLink);
+                            String[] links = matcher.getLinks().stream().map(WikiProcessor::possiblyCapitalize).distinct().toArray(String[]::new);
+                            PagePointer[] pointerLinks = new PagePointer[links.length];
+                            for (int i = 0; i < links.length; i++) {
+                                String link = links[i];
+                                PagePointer ptr = titleToPage.get(link);
                                 if (ptr == null) {
                                     ptr = new PagePointer(null);
-                                    titleToPage.put(capitalizedLink, ptr);
+                                    titleToPage.put(link.intern(), ptr);
                                 }
-                                pointerLinks.add(ptr);
+                                pointerLinks[i] = ptr;
                             }
-                            page = new WikiPageData(article.getTitle(), id, pointerLinks);
+                            page = new WikiPageData(article.getTitle().intern(), id, pointerLinks);
                             fixPagePointers(titleToPage, page);
                         }
                     }
@@ -170,7 +170,7 @@ public class WikiProcessor {
             Map.Entry<String, PagePointer> entry = iterator.next();
             WikiPageData page = (WikiPageData) entry.getValue().page;
             if (page != null) {
-                long[] links = page.getLinks().stream().filter(p -> p.page != null).mapToLong(p -> p.page.getId()).distinct().toArray();
+                long[] links = Arrays.stream(page.getLinks()).filter(p -> p.page != null).mapToLong(p -> p.page.getId()).distinct().toArray();
                 Arrays.sort(links);
                 if (links.length == 0) links = EMPTY_ARRAY;
                 PackedWikiPage packedPage = new PackedWikiPage(page.getId(), links, entry.getKey());

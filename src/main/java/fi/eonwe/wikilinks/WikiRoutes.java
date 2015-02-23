@@ -1,9 +1,7 @@
 package fi.eonwe.wikilinks;
 
-import com.carrotsearch.hppc.LongArrayList;
 import com.carrotsearch.hppc.LongIntMap;
 import com.carrotsearch.hppc.LongIntOpenHashMap;
-import com.carrotsearch.hppc.procedures.LongProcedure;
 import com.google.common.base.Charsets;
 import com.google.common.collect.Lists;
 
@@ -20,21 +18,15 @@ public class WikiRoutes {
     private final List<PackedWikiPage> pages;
     private final LongIntMap idIndexMap;
     private final PackedNameHelper[] sortedNames;
-    private final String[] names;
 
     public WikiRoutes(List<PackedWikiPage> pages) {
         this.pages = pages;
         this.idIndexMap = constructIdIndexMap(pages);
         this.sortedNames = constructSortedNames(pages);
-        this.names = Arrays.stream(sortedNames).map(p -> p.getTitle()).limit(500).toArray(String[]::new);
     }
 
     public List<String> findRoute(String startPage, String endPage) {
-        return findRoute(getIndex(startPage), getIndex(endPage));
-    }
-
-    private int findNameIndex(String name) {
-        return Arrays.binarySearch(Arrays.stream(sortedNames).map(p -> p.getTitle()).toArray(String[]::new), name);
+        return findRoute(getPage(startPage), getPage(endPage));
     }
 
     public List<String> findRandomRoute() {
@@ -49,14 +41,14 @@ public class WikiRoutes {
         do {
             endIx = rng.nextInt(sortedNames.length);
         } while (endIx == startIx);
-        return findRoute(startIx, endIx);
+        return findRoute(sortedNames[startIx].page, sortedNames[endIx].page);
     }
 
     public List<String> listLinks(String name) {
-        int index = getIndex(name);
-        if (index < 0) return Collections.emptyList();
+        PackedWikiPage page = getPage(name);
+        if (page == null) return Collections.emptyList();
         List<String> names = Lists.newArrayList();
-        pages.get(index).forEachLink(id -> {
+        page.forEachLink(id -> {
             int idIndex = idIndexMap.getOrDefault(id, -1);
             if (idIndex >= 0) {
                 names.add(pages.get(idIndex).getTitle());
@@ -65,9 +57,7 @@ public class WikiRoutes {
         return names;
     }
 
-    private List<String> findRoute(int start, int end) {
-        PackedWikiPage startPage = pages.get(start);
-        PackedWikiPage endPage = pages.get(end);
+    private List<String> findRoute(PackedWikiPage startPage, PackedWikiPage endPage) {
         long[] route = RouteFinder.find(startPage.getId(), endPage.getId(), pages, idIndexMap);
         List<String> path = Arrays.asList(Arrays.stream(route).mapToObj(id -> {
             int index = idIndexMap.getOrDefault(id, -1);
@@ -127,14 +117,14 @@ public class WikiRoutes {
         return 0;
     }
 
-    private int getIndex(String name) {
+    private PackedWikiPage getPage(String name) {
         int ix = Arrays.binarySearch(sortedNames, new StringNameHelper(name), COMP);
-        if (ix < 0) return -1;
-        return idIndexMap.getOrDefault(sortedNames[ix].page.getId(), -1);
+        if (ix < 0) return null;
+        return sortedNames[ix].page;
     }
 
     public boolean hasPage(String title) {
-        return getIndex(title) >= 0;
+        return getPage(title) != null;
     }
 
     private static class StringNameHelper implements NameHelper {

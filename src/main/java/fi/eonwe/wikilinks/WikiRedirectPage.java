@@ -10,7 +10,7 @@ public class WikiRedirectPage implements WikiPage {
     private final long id;
     private final String target;
 
-    public WikiRedirectPage(String title, long id,String target) {
+    public WikiRedirectPage(String title, long id, String target) {
         this.title = title;
         this.id = id;
         this.target = target;

@@ -83,7 +83,7 @@ public class WikiLinksTest {
         Map<String, PagePointer> map = Maps.newHashMap();
         WikiRedirectPage fooDir = new WikiRedirectPage("foo-redir", 0, "foo");
         WikiRedirectPage foofooDir = new WikiRedirectPage("foo-foo-redir", 1, "foo-redir");
-        WikiPageData fooPage = new WikiPageData("foo", 2, Lists.newArrayList());
+        WikiPageData fooPage = new WikiPageData("foo", 2, new PagePointer[0]);
         for (WikiPage page : new WikiPage[] { fooDir, foofooDir, fooPage}) {
             map.put(page.getTitle(), new PagePointer(page));
         }
@@ -124,7 +124,7 @@ public class WikiLinksTest {
                 }
             }
             String title = titlePrefix + i;
-            pointers[i].page = new WikiPageData(title, i, pagePointers);
+            pointers[i].page = new WikiPageData(title, i, pagePointers.toArray(new PagePointer[pagePointers.size()]));
             map.put(title, pointers[i]);
         }
         return map;
