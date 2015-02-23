@@ -2,9 +2,13 @@ package fi.eonwe.wikilinks;
 
 import com.carrotsearch.hppc.EmptyArrays;
 import com.carrotsearch.hppc.LongArrayList;
+import com.google.common.collect.Iterators;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.primitives.Ints;
+import com.googlecode.concurrenttrees.common.KeyValuePair;
+import com.googlecode.concurrenttrees.radix.ConcurrentRadixTree;
+import com.googlecode.concurrenttrees.radix.node.concrete.SmartArrayBasedNodeFactory;
 import info.bliki.wiki.dump.IArticleFilter;
 import info.bliki.wiki.dump.Siteinfo;
 import info.bliki.wiki.dump.WikiArticle;
@@ -18,6 +22,8 @@ import org.xml.sax.SAXException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
 import java.nio.channels.WritableByteChannel;
 import java.util.Arrays;
@@ -36,7 +42,7 @@ public class WikiProcessor {
 
     public static List<PackedWikiPage> readPages(InputStream input) {
         WikiProcessor processor = new WikiProcessor();
-        Map<String, PagePointer> pages = processor.preProcess(input);
+        ConcurrentRadixTree<PagePointer> pages = processor.preProcess(input);
 //        printStatistics(pages);
         WikiProcessor.resolveRedirects(pages);
 //        printStatistics(pages);
@@ -44,11 +50,8 @@ public class WikiProcessor {
         return packedPages;
     }
 
-    public Map<String, PagePointer> preProcess(InputStream input) {
-        final HashObjObjMap<String, PagePointer> titleToPage = HashObjObjMaps.getDefaultFactory()
-                .withNullKeyAllowed(false)
-                .withValueEquivalence(Equivalence.defaultEquality())
-                .newMutableMap();
+    public ConcurrentRadixTree<PagePointer> preProcess(InputStream input) {
+        final ConcurrentRadixTree<PagePointer> titleToPage = new ConcurrentRadixTree<>(new SmartArrayBasedNodeFactory());
         try {
             WikiXMLParser parser = new WikiXMLParser(input, new IArticleFilter() {
                 @Override
@@ -63,14 +66,14 @@ public class WikiProcessor {
                             page = new WikiRedirectPage(article.getTitle().intern(), id, matcher.getRedirectText().intern());
                             fixPagePointers(titleToPage, page);
                         } else {
-                            String[] links = matcher.getLinks().stream().map(WikiProcessor::possiblyCapitalize).distinct().toArray(String[]::new);
+                            String[] links = matcher.getLinks().stream().filter(l -> !l.isEmpty()).map(WikiProcessor::possiblyCapitalize).distinct().toArray(String[]::new);
                             PagePointer[] pointerLinks = new PagePointer[links.length];
                             for (int i = 0; i < links.length; i++) {
                                 String link = links[i];
-                                PagePointer ptr = titleToPage.get(link);
+                                PagePointer ptr = titleToPage.getValueForExactKey(link);
                                 if (ptr == null) {
                                     ptr = new PagePointer(null);
-                                    titleToPage.put(link.intern(), ptr);
+                                    titleToPage.put(link, ptr);
                                 }
                                 pointerLinks[i] = ptr;
                             }
@@ -96,8 +99,8 @@ public class WikiProcessor {
         return linkName;
     }
 
-    private static void fixPagePointers(HashObjObjMap<String, PagePointer> titleToPage, WikiPage page) {
-        PagePointer pointer = titleToPage.get(page.getTitle());
+    private static void fixPagePointers(ConcurrentRadixTree<PagePointer> titleToPage, WikiPage page) {
+        PagePointer pointer = titleToPage.getValueForExactKey(page.getTitle());
         if (pointer != null) {
             pointer.page = page;
         } else {
@@ -106,15 +109,20 @@ public class WikiProcessor {
         }
     }
 
-    public static void resolveRedirects(Map<String, PagePointer> map) {
-        map.values().stream().filter(p -> p.page != null && p.page.isRedirect()).forEach(p -> p.page = resolveUltimateTarget(p, map));
+    public static void resolveRedirects(ConcurrentRadixTree<PagePointer> map) {
+        map.getValuesForKeysStartingWith("").forEach(p -> {
+            if (p.page != null && p.page.isRedirect()) {
+                p.page = resolveUltimateTarget(p, map);
+            }
+        });
+//        map.values().stream().filter(p -> p.page != null && p.page.isRedirect()).forEach(p -> p.page = resolveUltimateTarget(p, map));
     }
 
-    private static WikiPage resolveUltimateTarget(PagePointer redirect, Map<String, PagePointer> map) {
+    private static WikiPage resolveUltimateTarget(PagePointer redirect, ConcurrentRadixTree<PagePointer> map) {
         WikiPage immediateTarget = redirect.page;
         if (immediateTarget == null || !(immediateTarget instanceof WikiRedirectPage)) return immediateTarget;
         WikiRedirectPage redirectPage = (WikiRedirectPage) immediateTarget;
-        PagePointer redirectPointer = map.get(redirectPage.getTarget());
+        PagePointer redirectPointer = map.getValueForExactKey(redirectPage.getTarget());
         WikiPage ultimateTarget;
         if (redirectPointer == null) {
             ultimateTarget = null;
@@ -163,23 +171,41 @@ public class WikiProcessor {
 
     private static final long[] EMPTY_ARRAY = new long[0];
 
-    public static List<PackedWikiPage> packPages(Map<String, PagePointer> map) {
+    public static List<PackedWikiPage> packPages(ConcurrentRadixTree<PagePointer> map) {
         List<PackedWikiPage> list = Lists.newArrayListWithCapacity(map.size());
-        Iterator<Map.Entry<String, PagePointer>> iterator = map.entrySet().iterator();
+        Iterable<KeyValuePair<PagePointer>> iter = getContent(map);
+//        Iterator<Map.Entry<String, PagePointer>> iterator = map.entrySet().iterator();
+        Iterator<KeyValuePair<PagePointer>> iterator = iter.iterator();
         while (iterator.hasNext()) {
-            Map.Entry<String, PagePointer> entry = iterator.next();
+            KeyValuePair<PagePointer> entry = iterator.next();
             WikiPageData page = (WikiPageData) entry.getValue().page;
             if (page != null) {
                 long[] links = Arrays.stream(page.getLinks()).filter(p -> p.page != null).mapToLong(p -> p.page.getId()).distinct().toArray();
                 Arrays.sort(links);
                 if (links.length == 0) links = EMPTY_ARRAY;
-                PackedWikiPage packedPage = new PackedWikiPage(page.getId(), links, entry.getKey());
+                PackedWikiPage packedPage = new PackedWikiPage(page.getId(), links, entry.getKey().toString());
                 list.add(packedPage);
             }
-            iterator.remove();
+//            iterator.remove();
         }
         list.sort((a,b) -> Long.compare(a.getId(), b.getId()));
         return list;
+    }
+
+    private static Iterable<KeyValuePair<PagePointer>> getContent(ConcurrentRadixTree<PagePointer> tree) {
+        try {
+            Method m = ConcurrentRadixTree.class.getDeclaredMethod("getKeyValuePairsForKeysStartingWith", CharSequence.class);
+            m.setAccessible(true);
+            return (Iterable<KeyValuePair<PagePointer>>) m.invoke(tree, "");
+        } catch (NoSuchMethodException|InvocationTargetException|IllegalAccessException e) {
+            if (e instanceof InvocationTargetException) {
+                Throwable cause = ((InvocationTargetException) e).getCause();
+                if (cause instanceof RuntimeException) throw (RuntimeException) cause;
+                throw new RuntimeException(cause);
+            }
+            throw new AssertionError(e);
+        }
+
     }
 
     public static List<PackedWikiPage> deserialize(ByteBuffer input) {

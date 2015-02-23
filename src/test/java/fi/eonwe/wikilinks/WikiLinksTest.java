@@ -5,6 +5,8 @@ import com.carrotsearch.hppc.LongOpenHashSet;
 import com.carrotsearch.hppc.LongSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.googlecode.concurrenttrees.radix.ConcurrentRadixTree;
+import com.googlecode.concurrenttrees.radix.node.concrete.SmartArrayBasedNodeFactory;
 import net.openhft.koloboke.collect.map.hash.HashObjObjMap;
 import net.openhft.koloboke.collect.map.hash.HashObjObjMaps;
 import org.junit.Test;
@@ -87,16 +89,24 @@ public class WikiLinksTest {
         for (WikiPage page : new WikiPage[] { fooDir, foofooDir, fooPage}) {
             map.put(page.getTitle(), new PagePointer(page));
         }
-        WikiProcessor.resolveRedirects(map);
+        WikiProcessor.resolveRedirects(convert(map));
         assertThat(map.get(fooDir.getTitle()).page, is(equalTo(fooPage)));
         assertThat(map.get(foofooDir.getTitle()).page, is(equalTo(fooPage)));
+    }
+
+    private ConcurrentRadixTree<PagePointer> convert(Map<String, PagePointer> map) {
+        final ConcurrentRadixTree<PagePointer> radixTree = new ConcurrentRadixTree<>(new SmartArrayBasedNodeFactory());
+        for (Map.Entry<String, PagePointer> entry : map.entrySet()) {
+            radixTree.putIfAbsent(entry.getKey(), entry.getValue());
+        }
+        return radixTree;
     }
 
     @Test
     public void itPacksPagesCorrectly() throws Exception {
         Map<String, PagePointer> map = createSimpleDenseGraph(4, "title_");
         assertThat(map.size(), is(equalTo(4)));
-        List<PackedWikiPage> packedWikiPages = WikiProcessor.packPages(map);
+        List<PackedWikiPage> packedWikiPages = WikiProcessor.packPages(convert(map));
         for (int i = 0; i < map.size(); i++) {
             PackedWikiPage page = packedWikiPages.get(i);
             assertThat(page.getId(), is(equalTo(Long.valueOf(i))));
@@ -133,7 +143,7 @@ public class WikiLinksTest {
     @Test
     public void packingRemovesDuplicates() {
         final String prefix = "foo_title_";
-        List<PackedWikiPage> readFromXml = WikiProcessor.packPages(createSimpleDenseGraph(4, prefix, true));
+        List<PackedWikiPage> readFromXml = WikiProcessor.packPages(convert(createSimpleDenseGraph(4, prefix, true)));
         readFromXml.forEach(p -> {
             long[] links = p.getLinks();
             LongOpenHashSet set = new LongOpenHashSet();
@@ -145,7 +155,7 @@ public class WikiLinksTest {
     @Test
     public void deserializeEqualsUnserialized() throws IOException {
         final String prefix = "foo_title_";
-        List<PackedWikiPage> readFromXml = WikiProcessor.packPages(createSimpleDenseGraph(512, prefix));
+        List<PackedWikiPage> readFromXml = WikiProcessor.packPages(convert(createSimpleDenseGraph(512, prefix)));
         ByteArrayListChannel channel = new ByteArrayListChannel();
         List<PackedWikiPage> read = readFromXml;
         for (int i = 0; i < 5; i++) {
@@ -169,7 +179,7 @@ public class WikiLinksTest {
         File tmpFile = File.createTempFile("disk-serialization-test", "tmp");
         tmpFile.deleteOnExit();
         final String prefix = "foo_title_";
-        List<PackedWikiPage> readFromXml = WikiProcessor.packPages(createSimpleDenseGraph(512, prefix));
+        List<PackedWikiPage> readFromXml = WikiProcessor.packPages(convert(createSimpleDenseGraph(512, prefix)));
         FileOutputStream fos = new FileOutputStream(tmpFile);
         WikiProcessor.serialize(readFromXml, fos.getChannel());
         fos.close();
