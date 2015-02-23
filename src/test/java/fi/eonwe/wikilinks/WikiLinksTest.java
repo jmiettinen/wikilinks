@@ -5,6 +5,8 @@ import com.carrotsearch.hppc.LongOpenHashSet;
 import com.carrotsearch.hppc.LongSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import net.openhft.koloboke.collect.map.hash.HashObjObjMap;
+import net.openhft.koloboke.collect.map.hash.HashObjObjMaps;
 import org.junit.Test;
 
 import java.io.BufferedInputStream;
@@ -103,16 +105,16 @@ public class WikiLinksTest {
         }
     }
 
-    private static Map<String, PagePointer> createSimpleDenseGraph(int size, String titlePrefix) {
+    private static HashObjObjMap<String, PagePointer> createSimpleDenseGraph(int size, String titlePrefix) {
         return createSimpleDenseGraph(size, titlePrefix, false);
     }
 
-    private static Map<String, PagePointer> createSimpleDenseGraph(int size, String titlePrefix, boolean duplicates) {
+    private static HashObjObjMap<String, PagePointer> createSimpleDenseGraph(int size, String titlePrefix, boolean duplicates) {
         PagePointer[] pointers = new PagePointer[size];
         for (int i = 0; i < pointers.length; i++) {
             pointers[i] = new PagePointer(null);
         }
-        Map<String, PagePointer> map = Maps.newHashMap();
+        HashObjObjMap<String, PagePointer> map = HashObjObjMaps.newMutableMap();
         for (int i = 0; i < pointers.length; i++) {
             List<PagePointer> pagePointers = Lists.newArrayList();
             for (int repeat = 0; repeat < (duplicates ? 2 : 1); repeat++) {

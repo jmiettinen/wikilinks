@@ -10,6 +10,9 @@ import info.bliki.wiki.dump.Siteinfo;
 import info.bliki.wiki.dump.WikiArticle;
 import info.bliki.wiki.dump.WikiPatternMatcher;
 import info.bliki.wiki.dump.WikiXMLParser;
+import net.openhft.koloboke.collect.Equivalence;
+import net.openhft.koloboke.collect.map.hash.HashObjObjMap;
+import net.openhft.koloboke.collect.map.hash.HashObjObjMaps;
 import org.xml.sax.SAXException;
 
 import java.io.IOException;
@@ -42,13 +45,18 @@ public class WikiProcessor {
     }
 
     public Map<String, PagePointer> preProcess(InputStream input) {
+        final HashObjObjMap<String, PagePointer> titleToPage = HashObjObjMaps.getDefaultFactory()
+                .withNullKeyAllowed(false)
+                .withValueEquivalence(Equivalence.defaultEquality())
+                .newMutableMap();
         try {
-            final HashMap<String, PagePointer> titleToPage = Maps.newHashMap();
             WikiXMLParser parser = new WikiXMLParser(input, new IArticleFilter() {
                 @Override
                 public void process(WikiArticle article, Siteinfo siteinfo) throws SAXException {
                     if (article.isMain()) {
-                        WikiPatternMatcher matcher = new WikiPatternMatcher(article.getText());
+                        String text = article.getText();
+                        if (text == null) text = "";
+                        WikiPatternMatcher matcher = new WikiPatternMatcher(text);
                         long id = Long.parseLong(article.getId());
                         WikiPage page;
                         if (matcher.isRedirect()) {
@@ -75,7 +83,7 @@ public class WikiProcessor {
             parser.parse();
             return titleToPage;
         } catch (SAXException | IOException e) {
-            return Collections.emptyMap();
+            return titleToPage;
         }
     }
 
@@ -88,7 +96,7 @@ public class WikiProcessor {
         return linkName;
     }
 
-    private static void fixPagePointers(Map<String, PagePointer> titleToPage, WikiPage page) {
+    private static void fixPagePointers(HashObjObjMap<String, PagePointer> titleToPage, WikiPage page) {
         PagePointer pointer = titleToPage.get(page.getTitle());
         if (pointer != null) {
             pointer.page = page;
@@ -168,7 +176,7 @@ public class WikiProcessor {
                 PackedWikiPage packedPage = new PackedWikiPage(page.getId(), links, entry.getKey());
                 list.add(packedPage);
             }
-//            iterator.remove();
+            iterator.remove();
         }
         list.sort((a,b) -> Long.compare(a.getId(), b.getId()));
         return list;

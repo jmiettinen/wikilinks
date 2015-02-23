@@ -6,6 +6,7 @@ import org.apache.commons.cli.GnuParser;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
+import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream;
 
 import java.io.BufferedInputStream;
 import java.io.File;
@@ -13,6 +14,7 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.List;
@@ -104,9 +106,13 @@ public class WikiLinks {
         }
     }
 
-    private static List<PackedWikiPage> readXml(FileInputStream fis) {
+    private static List<PackedWikiPage> readXml(FileInputStream fis, boolean isBzipStream) {
         try (BufferedInputStream bis = new BufferedInputStream(fis)) {
-            return WikiProcessor.readPages(bis);
+            InputStream is = bis;
+            if (isBzipStream) {
+                is = new BufferedInputStream(new BZip2CompressorInputStream(is));
+            }
+            return WikiProcessor.readPages(is);
         } catch (IOException e) {
             return handleError(e);
         }
@@ -143,7 +149,7 @@ public class WikiLinks {
         System.out.printf("Staring to read %s%n", inputFile);
         List<PackedWikiPage> pages;
         if (loadXml) {
-            pages = readXml(input);
+            pages = readXml(input, inputFile.getName().endsWith(".bz2"));
         } else {
             pages = readFromSerialized(input);
         }
@@ -166,7 +172,6 @@ public class WikiLinks {
         if (interactive) {
             System.out.println("Staring interactive mode");
             WikiRoutes routes = new WikiRoutes(pages);
-            System.out.println(routes.findRoute("April", "May"));
             System.out.println(routes.findRoute("April", "Ice cream"));
         }
     }
