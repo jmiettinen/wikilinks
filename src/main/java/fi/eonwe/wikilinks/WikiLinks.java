@@ -15,8 +15,6 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.MappedByteBuffer;
-import java.nio.channels.FileChannel;
 import java.util.List;
 
 /**
@@ -120,13 +118,7 @@ public class WikiLinks {
 
     private static List<PackedWikiPage> readFromSerialized(FileInputStream fis) {
         try {
-            FileChannel channel = fis.getChannel();
-            long size = channel.size();
-            if (size > Integer.MAX_VALUE) {
-                throw new IOException("Too large file (" + size + ")");
-            }
-            MappedByteBuffer buffer = channel.map(FileChannel.MapMode.READ_ONLY, 0, size);
-            return WikiProcessor.deserialize(buffer);
+            return WikiSerialization.readFromSerialized(fis);
         } catch (IOException e) {
             return handleError(e);
         }
@@ -158,7 +150,7 @@ public class WikiLinks {
             long writeStart = System.currentTimeMillis();
             System.out.printf("Starting to write output to %s%n", outputFile);
             try {
-                WikiProcessor.serialize(pages, fos.getChannel());
+                WikiSerialization.serialize(pages, fos.getChannel());
                 fos.getFD().sync();
                 fos.flush();
                 fos.close();

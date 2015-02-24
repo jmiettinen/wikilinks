@@ -2,7 +2,6 @@ package fi.eonwe.wikilinks;
 
 import com.carrotsearch.hppc.ByteArrayList;
 import com.carrotsearch.hppc.LongOpenHashSet;
-import com.carrotsearch.hppc.LongSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.googlecode.concurrenttrees.radix.ConcurrentRadixTree;
@@ -28,25 +27,6 @@ import static org.hamcrest.CoreMatchers.*;
 import static org.hamcrest.MatcherAssert.*;
 
 public class WikiLinksTest {
-
-//    @Test
-    public void marshalledAndUnmarshalledEqualsParsed() throws IOException {
-        String filePath = "src/data/simplewiki-20141222-pages-meta-current.xml";
-        InputStream in = new FileInputStream(filePath);
-        BufferedInputStream bis = new BufferedInputStream(in, 1 << 15);
-        List<PackedWikiPage> readFromXml = WikiProcessor.readPages(bis);
-        ByteArrayListChannel channel = new ByteArrayListChannel();
-        WikiProcessor.serialize(readFromXml, channel);
-        ByteBuffer input = ByteBuffer.wrap(channel.byteArrayList.buffer, 0, channel.byteArrayList.elementsCount);
-        List<PackedWikiPage> readFromSerialized = WikiProcessor.deserialize(input);
-
-        assertThat(readFromSerialized.size(), is(readFromXml.size()));
-        for (int i = 0; i < readFromSerialized.size(); i++) {
-            PackedWikiPage fromXml = readFromXml.get(i);
-            PackedWikiPage deserialized = readFromSerialized.get(i);
-            assertThat(deserialized, is(equalTo(fromXml)));
-        }
-    }
 
     private static class ByteArrayListChannel implements WritableByteChannel {
 
@@ -175,9 +155,9 @@ public class WikiLinksTest {
         ByteArrayListChannel channel = new ByteArrayListChannel();
         List<PackedWikiPage> read = readFromXml;
         for (int i = 0; i < 5; i++) {
-            WikiProcessor.serialize(read, channel);
+            WikiSerialization.serialize(read, channel);
             ByteBuffer input = ByteBuffer.wrap(channel.byteArrayList.buffer, 0, channel.byteArrayList.elementsCount);
-            read = WikiProcessor.deserialize(input);
+            read = WikiSerialization.deserialize(input);
         }
 
         assertThat(read.size(), is(readFromXml.size()));
@@ -197,12 +177,12 @@ public class WikiLinksTest {
         final String prefix = "foo_title_";
         List<PackedWikiPage> readFromXml = WikiProcessor.packPages(convert(createSimpleDenseGraph(512, prefix)));
         FileOutputStream fos = new FileOutputStream(tmpFile);
-        WikiProcessor.serialize(readFromXml, fos.getChannel());
+        WikiSerialization.serialize(readFromXml, fos.getChannel());
         fos.close();
         FileInputStream fin = new FileInputStream(tmpFile);
         FileChannel fc = fin.getChannel();
         long size = fc.size();
-        List<PackedWikiPage> readFromFile = WikiProcessor.deserialize(fc.map(FileChannel.MapMode.READ_ONLY, 0, size));
+        List<PackedWikiPage> readFromFile = WikiSerialization.deserialize(fc.map(FileChannel.MapMode.READ_ONLY, 0, size));
 
         assertThat(readFromFile.size(), is(readFromXml.size()));
         for (int i = 0; i < readFromXml.size(); i++) {

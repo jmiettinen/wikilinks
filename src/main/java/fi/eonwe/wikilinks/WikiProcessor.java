@@ -28,8 +28,6 @@ import java.util.Map;
  */
 public class WikiProcessor {
 
-    private static final int VERSION_NUMBER = 0x52ea2a00 | 1;
-
     public static List<PackedWikiPage> readPages(InputStream input) {
         WikiProcessor processor = new WikiProcessor();
         ConcurrentRadixTree<PagePointer> pages = processor.preProcess(input);
@@ -195,67 +193,18 @@ public class WikiProcessor {
         try {
             Method m = ConcurrentRadixTree.class.getDeclaredMethod("getKeyValuePairsForKeysStartingWith", CharSequence.class);
             m.setAccessible(true);
-            return (Iterable<KeyValuePair<PagePointer>>) m.invoke(tree, "");
+            @SuppressWarnings("unchecked")
+            Iterable<KeyValuePair<PagePointer>> result = (Iterable<KeyValuePair<PagePointer>>) m.invoke(tree, "");
+            return result;
         } catch (NoSuchMethodException|InvocationTargetException|IllegalAccessException e) {
             if (e instanceof InvocationTargetException) {
-                Throwable cause = ((InvocationTargetException) e).getCause();
+                Throwable cause = e.getCause();
                 if (cause instanceof RuntimeException) throw (RuntimeException) cause;
                 throw new RuntimeException(cause);
             }
             throw new AssertionError(e);
         }
 
-    }
-
-    public static List<PackedWikiPage> deserialize(ByteBuffer input) {
-        ByteBuffer buffer = input.duplicate();
-        int versionNumber = buffer.getInt();
-        if (versionNumber != VERSION_NUMBER) {
-            throw new IllegalArgumentException(
-                    String.format("Magic cookie %d did not match the expected %d", versionNumber, VERSION_NUMBER));
-        }
-        int count = Ints.checkedCast(buffer.getLong());
-        List<PackedWikiPage> pages = Lists.newArrayListWithCapacity(count);
-        for (int i = 0, offset = buffer.position(); i < count; i++) {
-            PackedWikiPage newPage = new PackedWikiPage(buffer, offset);
-            pages.add(newPage);
-            offset += newPage.getLength();
-        }
-        return pages;
-    }
-
-
-    public static void serialize(List<PackedWikiPage> graph, ByteBuffer output) throws IOException {
-        ByteBuffer buffer = ByteBuffer.allocate(Integer.BYTES + Long.BYTES);
-        buffer.putInt(VERSION_NUMBER);
-        buffer.putLong(graph.size());
-        buffer.flip();
-        output.put(buffer);
-        for (PackedWikiPage packedWikiPage : graph) {
-            packedWikiPage.writeTo(output);
-        }
-    }
-
-    public static void serialize(List<PackedWikiPage> graph, WritableByteChannel channel) throws IOException {
-        // Format:
-        // i32: magic bytes
-        // i64: article_count
-        // article_count repeats:
-        //   i64 article_id
-        //   i32 link_count
-        //   link_count repeats:
-        //     i64 link_target_id
-        //   i32 title_byte_size
-        //     title_byte_size repeats:
-        //     i8 title_byte
-        ByteBuffer buffer = ByteBuffer.allocate(Integer.BYTES + Long.BYTES);
-        buffer.putInt(VERSION_NUMBER);
-        buffer.putLong(graph.size());
-        buffer.flip();
-        channel.write(buffer);
-        for (PackedWikiPage packedWikiPage : graph) {
-            packedWikiPage.writeTo(channel);
-        }
     }
 
 

@@ -48,8 +48,16 @@ public class PackedWikiPage {
     }
 
     private static int getStringSizeOffset(ByteBuffer data, int baseOffset) {
-        int linkCount = data.getInt(baseOffset + LINK_SIZE_OFFSET);
-        return baseOffset + LINKS_OFFSET + linkCount * Long.BYTES;
+        long linkOffset = ((long) baseOffset) + LINK_SIZE_OFFSET;
+        if (linkOffset + Integer.BYTES > Integer.MAX_VALUE) {
+            return -1;
+        }
+        long linkCount = (long) data.getInt((int) linkOffset);
+        long stringSizeOffset = baseOffset + LINKS_OFFSET + linkCount * Long.BYTES;
+        if (stringSizeOffset + Integer.BYTES > Integer.MAX_VALUE) {
+            return -1;
+        }
+        return (int) stringSizeOffset;
     }
 
     private static long[] getLinks(ByteBuffer data, int baseOffset) {
@@ -145,9 +153,15 @@ public class PackedWikiPage {
 
     public static int getLength(ByteBuffer data, int baseOffset) {
         int stringSizeOffset = getStringSizeOffset(data, baseOffset);
+        if (stringSizeOffset == -1) {
+            return -1;
+        }
         int stringSize = data.getInt(stringSizeOffset);
-        int length = stringSizeOffset + Integer.BYTES + stringSize * Byte.BYTES - baseOffset;
-        return length;
+        long objectEnd = ((long) stringSizeOffset) + Integer.BYTES + stringSize * Byte.BYTES;
+        if (objectEnd + Byte.BYTES > Integer.MAX_VALUE) {
+            return -1;
+        }
+        return (int) (objectEnd - baseOffset);
     }
 
     public void writeTo(WritableByteChannel channel) throws IOException {
