@@ -1,10 +1,6 @@
 package fi.eonwe.wikilinks;
 
-import com.carrotsearch.hppc.EmptyArrays;
-import com.carrotsearch.hppc.LongArrayList;
-import com.google.common.collect.Iterators;
 import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
 import com.google.common.primitives.Ints;
 import com.googlecode.concurrenttrees.common.KeyValuePair;
 import com.googlecode.concurrenttrees.radix.ConcurrentRadixTree;
@@ -14,25 +10,19 @@ import info.bliki.wiki.dump.Siteinfo;
 import info.bliki.wiki.dump.WikiArticle;
 import info.bliki.wiki.dump.WikiPatternMatcher;
 import info.bliki.wiki.dump.WikiXMLParser;
-import net.openhft.koloboke.collect.Equivalence;
-import net.openhft.koloboke.collect.map.hash.HashObjObjMap;
-import net.openhft.koloboke.collect.map.hash.HashObjObjMaps;
 import org.xml.sax.SAXException;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
 import java.nio.channels.WritableByteChannel;
 import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Consumer;
 
 /**
  */
@@ -112,22 +102,31 @@ public class WikiProcessor {
     public static void resolveRedirects(ConcurrentRadixTree<PagePointer> map) {
         map.getValuesForKeysStartingWith("").forEach(p -> {
             if (p.page != null && p.page.isRedirect()) {
-                p.page = resolveUltimateTarget(p, map);
+                p.page = resolveUltimateTarget(p, map, null);
             }
         });
 //        map.values().stream().filter(p -> p.page != null && p.page.isRedirect()).forEach(p -> p.page = resolveUltimateTarget(p, map));
     }
 
-    private static WikiPage resolveUltimateTarget(PagePointer redirect, ConcurrentRadixTree<PagePointer> map) {
+    private static WikiPage resolveUltimateTarget(PagePointer redirect, ConcurrentRadixTree<PagePointer> map, IdentityHashMap<WikiPage, Boolean> visited) {
         WikiPage immediateTarget = redirect.page;
         if (immediateTarget == null || !(immediateTarget instanceof WikiRedirectPage)) return immediateTarget;
+        if (visited == null) {
+            visited = new IdentityHashMap<>();
+        }
+        if (visited.containsKey(immediateTarget)) {
+            // We've already been here, thus we have a cycle.
+            return null;
+        } else {
+            visited.put(immediateTarget, Boolean.TRUE);
+        }
         WikiRedirectPage redirectPage = (WikiRedirectPage) immediateTarget;
         PagePointer redirectPointer = map.getValueForExactKey(redirectPage.getTarget());
         WikiPage ultimateTarget;
         if (redirectPointer == null) {
             ultimateTarget = null;
         } else {
-            ultimateTarget = resolveUltimateTarget(redirectPointer, map);
+            ultimateTarget = resolveUltimateTarget(redirectPointer, map, visited);
             redirectPointer.page = ultimateTarget;
         }
         return ultimateTarget;

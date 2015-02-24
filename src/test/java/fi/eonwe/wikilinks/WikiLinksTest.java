@@ -94,6 +94,22 @@ public class WikiLinksTest {
         assertThat(map.get(foofooDir.getTitle()).page, is(equalTo(fooPage)));
     }
 
+    @Test(timeout = 1000L)
+    public void itResolvesInfinityRedirects() {
+        Map<String, PagePointer> map = Maps.newHashMap();
+        WikiRedirectPage fooDir = new WikiRedirectPage("foo-redir", 0, "foo-foo-foo-redir");
+        WikiRedirectPage foofooDir = new WikiRedirectPage("foo-foo-redir", 1, "foo-redir");
+        WikiRedirectPage foofoofooDir = new WikiRedirectPage("foo-foo-foo-redir", 2, "foo-redir");
+        WikiPageData fooPage = new WikiPageData("foo", 3, new PagePointer[0]);
+        for (WikiPage page : new WikiPage[] { fooDir, foofooDir, foofoofooDir, fooPage}) {
+            map.put(page.getTitle(), new PagePointer(page));
+        }
+        WikiProcessor.resolveRedirects(convert(map));
+        assertThat(map.get(fooDir.getTitle()).page, is(nullValue()));
+        assertThat(map.get(foofooDir.getTitle()).page, is(nullValue()));
+        assertThat(map.get(foofoofooDir.getTitle()).page, is(nullValue()));
+    }
+
     private ConcurrentRadixTree<PagePointer> convert(Map<String, PagePointer> map) {
         final ConcurrentRadixTree<PagePointer> radixTree = new ConcurrentRadixTree<>(new SmartArrayBasedNodeFactory());
         for (Map.Entry<String, PagePointer> entry : map.entrySet()) {
