@@ -15,9 +15,9 @@ import java.util.logging.Logger;
  */
 public class WikiRoutes {
 
-    private final List<PackedWikiPage> pages;
+    private final List<? extends LeanWikiPage> pages;
     private final HashLongIntMap idIndexMap;
-    private final PackedWikiPage[] sortedNames;
+    private final LeanWikiPage[] sortedNames;
 
     private static final Logger logger = Logger.getLogger(WikiRoutes.class.getCanonicalName());
     static {
@@ -50,7 +50,7 @@ public class WikiRoutes {
     }
 
     public List<String> listLinks(String name) {
-        PackedWikiPage page = getPage(name);
+        LeanWikiPage page = getPage(name);
         if (page == null) return Collections.emptyList();
         List<String> names = Lists.newArrayList();
         page.forEachLink(id -> {
@@ -62,7 +62,7 @@ public class WikiRoutes {
         return names;
     }
 
-    private List<String> findRoute(PackedWikiPage startPage, PackedWikiPage endPage) {
+    private List<String> findRoute(LeanWikiPage startPage, LeanWikiPage endPage) {
         long[] route = RouteFinder.find(startPage.getId(), endPage.getId(), pages, idIndexMap);
         List<String> path = Arrays.asList(Arrays.stream(route).mapToObj(id -> {
             int index = idIndexMap.getOrDefault(id, -1);
@@ -92,8 +92,8 @@ public class WikiRoutes {
         return pagesArray;
     }
 
-    private PackedWikiPage getPage(String name) {
-        int ix = Arrays.binarySearch(sortedNames, new PackedWikiPage(Integer.MAX_VALUE, new long[0], name), PackedWikiPage::compareTitle);
+    private LeanWikiPage getPage(String name) {
+        int ix = Arrays.binarySearch(sortedNames, new PackedWikiPage(Integer.MAX_VALUE, new long[0], name), LeanWikiPage::compareTitle);
         if (ix < 0) return null;
         return sortedNames[ix];
     }

@@ -164,9 +164,14 @@ public class WikiLinks {
         if (interactive) {
             System.out.println("Staring interactive mode");
             long[] statistics = reportStatistics(pages);
+            System.out.printf("There are %d pages in total%n", pages.size());
             System.out.printf("The largest id found is %d%n", statistics[0]);
             System.out.printf("There are %d links in total%n", statistics[1]);
-            System.out.printf("Total length of the titles is %d bytes%n", statistics[2]);
+            System.out.printf("The largest amount of links found is %d%n", statistics[2]);
+            System.out.printf("Total length of the titles is %d bytes%n", statistics[3]);
+            System.out.printf("The longest title is %d bytes%n", statistics[4]);
+
+
             long initStart = System.currentTimeMillis();
             WikiRoutes routes = new WikiRoutes(pages);
             System.out.printf("Initializing routes took %d ms%n", System.currentTimeMillis() - initStart);
@@ -178,15 +183,21 @@ public class WikiLinks {
         long largestId = -1;
         long linkCount = 0;
         long titleTotal = 0;
+        long longestTitle = -1;
+        long largestLinkCount = -1;
         for (PackedWikiPage page : pages) {
             long pageId = page.getId();
             if (pageId > largestId) {
                 largestId = pageId;
             }
-            linkCount += page.getLinkCount();
-            titleTotal += page.getTitleLength();
+            long thisLinkCount = page.getLinkCount();
+            if (thisLinkCount > largestLinkCount) largestLinkCount = thisLinkCount;
+            linkCount += thisLinkCount;
+            long thisPageTitle = page.getTitleLength();
+            if (thisPageTitle > longestTitle) longestTitle = thisPageTitle;
+            titleTotal += thisPageTitle;
         }
-        return new long[] { largestId, linkCount, titleTotal };
+        return new long[] { largestId, linkCount, largestLinkCount, titleTotal, longestTitle };
     }
 
     public static <T> T handleError(Throwable t) {

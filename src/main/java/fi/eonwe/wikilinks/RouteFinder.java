@@ -18,11 +18,11 @@ public class RouteFinder {
     private final FibonacciHeap<RouteData> heap;
     private final HashLongObjMap<FibonacciHeapNode<RouteData>> nodes = HashLongObjMaps.newMutableMap();
     private final HashLongIntMap idIndexMap;
-    private final List<PackedWikiPage> graph;
+    private final List<? extends LeanWikiPage> graph;
     private final long startId;
     private final long endId;
 
-    private RouteFinder(long startId, long endId, List<PackedWikiPage> graph, HashLongIntMap idIndexMap) {
+    private RouteFinder(long startId, long endId, List<? extends LeanWikiPage> graph, HashLongIntMap idIndexMap) {
         this.graph = graph;
         this.idIndexMap = idIndexMap;
         this.startId = startId;
@@ -31,7 +31,7 @@ public class RouteFinder {
         setup(startId);
     }
 
-    public static long[] find(long startId, long endId, List<PackedWikiPage> graph, HashLongIntMap idIndexMap) {
+    public static long[] find(long startId, long endId, List<? extends LeanWikiPage> graph, HashLongIntMap idIndexMap) {
         RouteFinder finder = new RouteFinder(startId, endId, graph, idIndexMap);
         long[] route = finder.find();
         return route;
@@ -42,7 +42,7 @@ public class RouteFinder {
         heap.insert(node, 0.0);
     }
 
-    private PackedWikiPage forId(long id) {
+    private LeanWikiPage forId(long id) {
         int index = idIndexMap.getOrDefault(id, -1);
         if (index < 0 || index >= graph.size()) return null;
         return graph.get(index);
@@ -50,9 +50,9 @@ public class RouteFinder {
 
     private static class RouteData {
         public RouteData prev;
-        public final PackedWikiPage page;
+        public final LeanWikiPage page;
 
-        private RouteData(PackedWikiPage page) {
+        private RouteData(LeanWikiPage page) {
             this.page = page;
         }
     }
@@ -71,7 +71,7 @@ public class RouteFinder {
         while (!heap.isEmpty()) {
             FibonacciHeapNode<RouteData> min = heap.removeMin();
             final double distance = min.getKey();
-            PackedWikiPage page = min.getData().page;
+            LeanWikiPage page = min.getData().page;
             if (page.getId() == endId) return recordRoute(min.getData());
             page.forEachLink(linkTarget -> {
                 FibonacciHeapNode<RouteData> node = getNode(linkTarget);

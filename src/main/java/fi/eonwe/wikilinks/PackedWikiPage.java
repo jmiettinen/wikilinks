@@ -9,7 +9,7 @@ import java.util.function.LongConsumer;
 
 /**
  */
-public class PackedWikiPage {
+public class PackedWikiPage implements LeanWikiPage<PackedWikiPage> {
 
     private static final int ID_OFFSET = 0;
     private static final int LINK_SIZE_OFFSET = ID_OFFSET + Long.BYTES;
@@ -207,6 +207,5 @@ public class PackedWikiPage {
     public int hashCode() {
         return Long.hashCode(getId());
     }
-
 
 }
