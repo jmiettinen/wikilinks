@@ -163,9 +163,30 @@ public class WikiLinks {
         }
         if (interactive) {
             System.out.println("Staring interactive mode");
+            long[] statistics = reportStatistics(pages);
+            System.out.printf("The largest id found is %d%n", statistics[0]);
+            System.out.printf("There are %d links in total%n", statistics[1]);
+            System.out.printf("Total length of the titles is %d bytes%n", statistics[2]);
+            long initStart = System.currentTimeMillis();
             WikiRoutes routes = new WikiRoutes(pages);
+            System.out.printf("Initializing routes took %d ms%n", System.currentTimeMillis() - initStart);
             System.out.println(routes.findRoute("April", "Ice cream"));
         }
+    }
+
+    public static long[] reportStatistics(Iterable<PackedWikiPage> pages) {
+        long largestId = -1;
+        long linkCount = 0;
+        long titleTotal = 0;
+        for (PackedWikiPage page : pages) {
+            long pageId = page.getId();
+            if (pageId > largestId) {
+                largestId = pageId;
+            }
+            linkCount += page.getLinkCount();
+            titleTotal += page.getTitleLength();
+        }
+        return new long[] { largestId, linkCount, titleTotal };
     }
 
     public static <T> T handleError(Throwable t) {

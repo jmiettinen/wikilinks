@@ -1,15 +1,13 @@
 package fi.eonwe.wikilinks;
 
-import com.carrotsearch.hppc.LongArrayList;
-import com.carrotsearch.hppc.LongIntMap;
-import com.carrotsearch.hppc.LongObjectMap;
-import com.carrotsearch.hppc.LongObjectOpenHashMap;
-import com.carrotsearch.hppc.procedures.LongProcedure;
+import com.google.common.collect.Lists;
 import com.google.common.primitives.Longs;
+import net.openhft.koloboke.collect.map.hash.HashLongIntMap;
+import net.openhft.koloboke.collect.map.hash.HashLongObjMap;
+import net.openhft.koloboke.collect.map.hash.HashLongObjMaps;
 import org.jgrapht.util.FibonacciHeap;
 import org.jgrapht.util.FibonacciHeapNode;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -18,13 +16,13 @@ import java.util.List;
 public class RouteFinder {
 
     private final FibonacciHeap<RouteData> heap;
-    private final LongObjectMap<FibonacciHeapNode<RouteData>> nodes = new LongObjectOpenHashMap<>();
-    private final LongIntMap idIndexMap;
+    private final HashLongObjMap<FibonacciHeapNode<RouteData>> nodes = HashLongObjMaps.newMutableMap();
+    private final HashLongIntMap idIndexMap;
     private final List<PackedWikiPage> graph;
     private final long startId;
     private final long endId;
 
-    private RouteFinder(long startId, long endId, List<PackedWikiPage> graph, LongIntMap idIndexMap) {
+    private RouteFinder(long startId, long endId, List<PackedWikiPage> graph, HashLongIntMap idIndexMap) {
         this.graph = graph;
         this.idIndexMap = idIndexMap;
         this.startId = startId;
@@ -33,7 +31,7 @@ public class RouteFinder {
         setup(startId);
     }
 
-    public static long[] find(long startId, long endId, List<PackedWikiPage> graph, LongIntMap idIndexMap) {
+    public static long[] find(long startId, long endId, List<PackedWikiPage> graph, HashLongIntMap idIndexMap) {
         RouteFinder finder = new RouteFinder(startId, endId, graph, idIndexMap);
         long[] route = finder.find();
         return route;
@@ -88,15 +86,14 @@ public class RouteFinder {
     }
 
     private long[] recordRoute(RouteData endPoint) {
-        LongArrayList list = new LongArrayList();
+        List<Long> list = Lists.newArrayList();
         RouteData cur = endPoint;
         while (cur != null) {
             list.add(cur.page.getId());
             cur = cur.prev;
         }
-        List<Long> listlist =  Longs.asList(list.toArray());
-        Collections.reverse(listlist);
-        return Longs.toArray(listlist);
+        Collections.reverse(list);
+        return Longs.toArray(list);
     }
 
 

@@ -1,11 +1,11 @@
 package fi.eonwe.wikilinks;
 
-import com.carrotsearch.hppc.procedures.LongProcedure;
 import com.google.common.base.Charsets;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.WritableByteChannel;
+import java.util.function.LongConsumer;
 
 /**
  */
@@ -88,18 +88,26 @@ public class PackedWikiPage {
         }
     }
 
+    public int getTitleLength() {
+        int stringSizeOffset = getStringSizeOffset(data, offset);
+        return data.getInt(stringSizeOffset);
+    }
+
     public long getId() { return data.getLong(offset); }
+
+    public int getLinkCount() {
+        return data.getInt(offset + LINK_SIZE_OFFSET);
+    }
 
     public long[] getLinks() { return getLinks(data, offset); }
 
-    public <T extends LongProcedure> T forEachLink(T procedure) {
+    public void forEachLink(LongConsumer procedure) {
         int linkCount = data.getInt(offset + LINK_SIZE_OFFSET);
         if (linkCount != 0) {
             for (int currentOffset = this.offset + LINKS_OFFSET, i = 0; i < linkCount; i++, currentOffset += Long.BYTES) {
-                procedure.apply(data.getLong(currentOffset));
+                procedure.accept(data.getLong(currentOffset));
             }
         }
-        return procedure;
     }
 
     public String getTitle() { return getTitle(data, offset); }

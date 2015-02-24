@@ -1,27 +1,25 @@
 package fi.eonwe.wikilinks;
 
-import com.carrotsearch.hppc.ByteArrayList;
-import com.carrotsearch.hppc.LongOpenHashSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.googlecode.concurrenttrees.radix.ConcurrentRadixTree;
-import com.googlecode.concurrenttrees.radix.node.concrete.SmartArrayBasedNodeFactory;
+import com.google.common.collect.Sets;
 import net.openhft.koloboke.collect.map.hash.HashObjObjMap;
 import net.openhft.koloboke.collect.map.hash.HashObjObjMaps;
 import org.junit.Test;
 
-import java.io.BufferedInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.WritableByteChannel;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.hamcrest.CoreMatchers.*;
 import static org.hamcrest.MatcherAssert.*;
@@ -31,7 +29,7 @@ public class WikiLinksTest {
     private static class ByteArrayListChannel implements WritableByteChannel {
 
         private boolean open = true;
-        private final ByteArrayList byteArrayList = new ByteArrayList();
+        private final ByteArrayOutputStream bos = new ByteArrayOutputStream();
 
         @Override
         public int write(ByteBuffer src) throws IOException {
@@ -43,7 +41,7 @@ public class WikiLinksTest {
                 int left = buffer.limit() - buffer.position();
                 readLen = Math.min(left, tmp.length);
                 buffer.get(tmp, 0, readLen);
-                byteArrayList.add(tmp, 0, readLen);
+                bos.write(tmp, 0, readLen);
                 written += readLen;
             } while (readLen > 0);
             return written;
@@ -90,12 +88,8 @@ public class WikiLinksTest {
         assertThat(map.get(foofoofooDir.getTitle()).page, is(nullValue()));
     }
 
-    private ConcurrentRadixTree<PagePointer> convert(Map<String, PagePointer> map) {
-        final ConcurrentRadixTree<PagePointer> radixTree = new ConcurrentRadixTree<>(new SmartArrayBasedNodeFactory());
-        for (Map.Entry<String, PagePointer> entry : map.entrySet()) {
-            radixTree.putIfAbsent(entry.getKey(), entry.getValue());
-        }
-        return radixTree;
+    private HashObjObjMap<String, PagePointer> convert(Map<String, PagePointer> map) {
+        return HashObjObjMaps.newImmutableMap(map);
     }
 
     @Test
@@ -142,8 +136,8 @@ public class WikiLinksTest {
         List<PackedWikiPage> readFromXml = WikiProcessor.packPages(convert(createSimpleDenseGraph(4, prefix, true)));
         readFromXml.forEach(p -> {
             long[] links = p.getLinks();
-            LongOpenHashSet set = new LongOpenHashSet();
-            set.add(links);
+            Set<Long> set = Sets.newHashSet();
+            Arrays.stream(links).forEach(set::add);
             assertThat(links.length, is(equalTo(set.size())));
         });
     }
@@ -156,7 +150,7 @@ public class WikiLinksTest {
         List<PackedWikiPage> read = readFromXml;
         for (int i = 0; i < 5; i++) {
             WikiSerialization.serialize(read, channel);
-            ByteBuffer input = ByteBuffer.wrap(channel.byteArrayList.buffer, 0, channel.byteArrayList.elementsCount);
+            ByteBuffer input = ByteBuffer.wrap(channel.bos.toByteArray());
             read = WikiSerialization.deserialize(input);
         }
 
@@ -182,7 +176,7 @@ public class WikiLinksTest {
         FileInputStream fin = new FileInputStream(tmpFile);
         FileChannel fc = fin.getChannel();
         long size = fc.size();
-        List<PackedWikiPage> readFromFile = WikiSerialization.deserialize(fc.map(FileChannel.MapMode.READ_ONLY, 0, size));
+        List<PackedWikiPage> readFromFile = WikiSerialization.readFromSerialized(fc);
 
         assertThat(readFromFile.size(), is(readFromXml.size()));
         for (int i = 0; i < readFromXml.size(); i++) {

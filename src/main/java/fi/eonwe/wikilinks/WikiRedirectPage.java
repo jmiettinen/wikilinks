@@ -1,7 +1,5 @@
 package fi.eonwe.wikilinks;
 
-import java.util.List;
-
 /**
  */
 public class WikiRedirectPage implements WikiPage {
