@@ -13,4 +13,6 @@ public interface LeanWikiPage<T extends LeanWikiPage<T>> {
     long getId();
 
     int compareTitle(T other);
+
+    T createTempFor(String title);
 }

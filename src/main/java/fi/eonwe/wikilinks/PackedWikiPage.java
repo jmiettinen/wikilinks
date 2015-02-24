@@ -159,6 +159,11 @@ public class PackedWikiPage implements LeanWikiPage<PackedWikiPage> {
         return 0;
     }
 
+    @Override
+    public PackedWikiPage createTempFor(String title) {
+        return new PackedWikiPage(0, EMPTY_ARRAY, title);
+    }
+
     public static int getLength(ByteBuffer data, int baseOffset) {
         int stringSizeOffset = getStringSizeOffset(data, baseOffset);
         if (stringSizeOffset == -1) {

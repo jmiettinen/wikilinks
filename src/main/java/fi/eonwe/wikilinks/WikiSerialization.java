@@ -90,7 +90,7 @@ public class WikiSerialization {
         }
     }
 
-    public static void serialize(List<PackedWikiPage> graph, ByteBuffer output) throws IOException {
+    public static void serialize(List<? extends PackedWikiPage> graph, ByteBuffer output) throws IOException {
         ByteBuffer buffer = ByteBuffer.allocate(Integer.BYTES + Long.BYTES);
         buffer.putInt(VERSION_NUMBER);
         buffer.putLong(graph.size());

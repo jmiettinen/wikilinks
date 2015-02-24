@@ -139,7 +139,7 @@ public class WikiLinks {
         }
         long loadStart = System.currentTimeMillis();
         System.out.printf("Staring to read %s%n", inputFile);
-        List<PackedWikiPage> pages;
+        List<? extends LeanWikiPage<?>> pages;
         if (loadXml) {
             pages = readXml(input, inputFile.getName().endsWith(".bz2"));
         } else {
@@ -150,7 +150,7 @@ public class WikiLinks {
             long writeStart = System.currentTimeMillis();
             System.out.printf("Starting to write output to %s%n", outputFile);
             try {
-                WikiSerialization.serialize(pages, fos.getChannel());
+                WikiSerialization.serialize((List<PackedWikiPage>) pages, fos.getChannel());
                 fos.getFD().sync();
                 fos.flush();
                 fos.close();
@@ -163,6 +163,9 @@ public class WikiLinks {
         }
         if (interactive) {
             System.out.println("Staring interactive mode");
+            long convertStart = System.currentTimeMillis();
+            pages = WikiPageConverter.convertPacked(pages).getPages();
+            System.out.printf("Conversion took %s ms%n", System.currentTimeMillis() - convertStart);
             long[] statistics = reportStatistics(pages);
             System.out.printf("There are %d pages in total%n", pages.size());
             System.out.printf("The largest id found is %d%n", statistics[0]);
@@ -173,19 +176,19 @@ public class WikiLinks {
 
 
             long initStart = System.currentTimeMillis();
-            WikiRoutes routes = new WikiRoutes(pages);
+            WikiRoutes<?> routes = new WikiRoutes(pages);
             System.out.printf("Initializing routes took %d ms%n", System.currentTimeMillis() - initStart);
             System.out.println(routes.findRoute("April", "Ice cream"));
         }
     }
 
-    public static long[] reportStatistics(Iterable<PackedWikiPage> pages) {
+    public static long[] reportStatistics(Iterable<? extends LeanWikiPage<?>> pages) {
         long largestId = -1;
         long linkCount = 0;
         long titleTotal = 0;
         long longestTitle = -1;
         long largestLinkCount = -1;
-        for (PackedWikiPage page : pages) {
+        for (LeanWikiPage page : pages) {
             long pageId = page.getId();
             if (pageId > largestId) {
                 largestId = pageId;

@@ -13,9 +13,9 @@ import java.util.logging.Logger;
 
 /**
  */
-public class WikiRoutes {
+public class WikiRoutes<T extends LeanWikiPage<T>> {
 
-    private final List<? extends LeanWikiPage> pages;
+    private final List<T> pages;
     private final HashLongIntMap idIndexMap;
     private final LeanWikiPage[] sortedNames;
 
@@ -24,7 +24,7 @@ public class WikiRoutes {
         logger.setLevel(Level.WARNING);
     }
 
-    public WikiRoutes(List<PackedWikiPage> pages) {
+    public WikiRoutes(List<T> pages) {
         this.pages = pages;
         this.idIndexMap = constructIdIndexMap(pages);
         this.sortedNames = constructSortedNames(pages);
@@ -71,7 +71,7 @@ public class WikiRoutes {
         return path;
     }
 
-    private static HashLongIntMap constructIdIndexMap(List<PackedWikiPage> pages) {
+    private static HashLongIntMap constructIdIndexMap(List<? extends LeanWikiPage<?>> pages) {
         long startTime = System.currentTimeMillis();
         logger.info("Starting to construct id -> index map");
         HashLongIntMap map = HashLongIntMaps.newImmutableMap(mapCreator -> {
@@ -83,17 +83,18 @@ public class WikiRoutes {
         return map;
     }
 
-    private static PackedWikiPage[] constructSortedNames(List<PackedWikiPage> pages) {
+    private static LeanWikiPage[] constructSortedNames(List<? extends LeanWikiPage<?>> pages) {
         long startTime = System.currentTimeMillis();
         logger.info("Starting to sort names");
-        PackedWikiPage[] pagesArray = pages.toArray(new PackedWikiPage[pages.size()]);
-        Arrays.sort(pagesArray, PackedWikiPage::compareTitle);
+        LeanWikiPage[] pagesArray = pages.toArray(new LeanWikiPage[pages.size()]);
+        Arrays.sort(pagesArray, LeanWikiPage::compareTitle);
         logger.info(() -> String.format("Took %d ms to sort names", System.currentTimeMillis() - startTime));
         return pagesArray;
     }
 
     private LeanWikiPage getPage(String name) {
-        int ix = Arrays.binarySearch(sortedNames, new PackedWikiPage(Integer.MAX_VALUE, new long[0], name), LeanWikiPage::compareTitle);
+        LeanWikiPage p = sortedNames[0];
+        int ix = Arrays.binarySearch(sortedNames, p.createTempFor(name), LeanWikiPage::compareTitle);
         if (ix < 0) return null;
         return sortedNames[ix];
     }

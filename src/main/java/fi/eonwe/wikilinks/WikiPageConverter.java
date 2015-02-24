@@ -13,8 +13,8 @@ import java.util.List;
 public class WikiPageConverter {
 
 
-    public ConvertedWikiPages convertPacked(List<PackedWikiPage> list) {
-        Collections.sort(list, PackedWikiPage::compareTitle);
+    public static ConvertedWikiPages convertPacked(List<? extends LeanWikiPage> list) {
+        Collections.sort(list, LeanWikiPage::compareTitle);
         final int[] titleTotalLength = {0};
         final int[] linkTotalCount = {0};
         list.forEach(p -> {
@@ -38,6 +38,9 @@ public class WikiPageConverter {
             titlesBuffer.put(bytes);
             writePage(pageObjectBuffer, id, linkOffset, linkCount[0], titlesOffset, titleLen);
         });
+        pageObjectBuffer.flip();
+        titlesBuffer.flip();
+        linksBuffer.flip();
         return new ConvertedWikiPages(pageObjectBuffer, linksBuffer, titlesBuffer, list.size());
     }
 
