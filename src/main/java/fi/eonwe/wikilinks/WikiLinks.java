@@ -1,7 +1,5 @@
 package fi.eonwe.wikilinks;
 
-import com.google.common.base.Joiner;
-import fi.eonwe.wikilinks.fibonacciheap.Helpers;
 import fi.eonwe.wikilinks.leanpages.LeanWikiPage;
 import fi.eonwe.wikilinks.leanpages.BufferWikiPage;
 import fi.eonwe.wikilinks.leanpages.BufferWikiSerialization;
@@ -9,6 +7,7 @@ import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.GnuParser;
 import org.apache.commons.cli.Option;
+import org.apache.commons.cli.OptionGroup;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream;
@@ -22,12 +21,9 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
-
-import static fi.eonwe.wikilinks.fibonacciheap.Helpers.quote;
 
 /**
  * Hello world!
@@ -35,15 +31,27 @@ import static fi.eonwe.wikilinks.fibonacciheap.Helpers.quote;
 public class WikiLinks {
 
     private static final Options opts = new Options();
+    private static final String XML_INPUT = "x";
+    private static final String SERIALIZED_INPUT = "s";
+    private static final String WRITE_OUTPUT = "o";
+    private static final String DISPLAY_HELP = "h";
+    private static final String INTERACTIVE_MODE = "i";
+    private static final String BENCHMARK_MODE = "b";
+
     static {
-        opts.addOption("x", true, "Input WikiMedia XML file");
-        opts.addOption("s", true, "Input serialized graph file");
-        opts.addOption("o", true, "Output file for serialized graph");
-        opts.addOption("i", false, "Use interactive mode");
-        opts.addOption("h", false, "Print help");
+        opts.addOption(XML_INPUT, true, "Input WikiMedia XML file");
+        opts.addOption(SERIALIZED_INPUT, true, "Input serialized graph file");
+        opts.addOption(WRITE_OUTPUT, true, "Output file for serialized graph");
+        opts.addOption(DISPLAY_HELP, false, "Print help");
+
+        OptionGroup group = new OptionGroup();
+        group.addOption(new Option(INTERACTIVE_MODE, "Use interactive mode"));
+        group.addOption(new Option(BENCHMARK_MODE, "Run benchmarks"));
+        opts.addOptionGroup(group);
     }
 
     private static enum Source { XML, SERIALIZED, STDIN }
+    private static enum OperationMode { NONE, INTERACTIVE, BENCHMARK }
 
     public static CommandLine parseOptions(String[] args) {
         CommandLineParser parser = new GnuParser();
@@ -67,16 +75,16 @@ public class WikiLinks {
 
     public static void main(String[] args) {
         CommandLine commandLine = parseOptions(args);
-        if (commandLine.hasOption('h') || commandLine.getOptions().length == 0) {
+        if (commandLine.hasOption(DISPLAY_HELP) || commandLine.getOptions().length == 0) {
             printHelpAndExit();
         }
-        File inputFile = null;
-        Source source = Source.STDIN;
-        if (commandLine.hasOption('x')) {
-            inputFile = new File(commandLine.getOptionValue('x'));
+        File inputFile;
+        Source source;
+        if (commandLine.hasOption(XML_INPUT)) {
+            inputFile = new File(commandLine.getOptionValue(XML_INPUT));
             source = Source.XML;
-        } else if (commandLine.hasOption('s')) {
-            inputFile = new File(commandLine.getOptionValue('s'));
+        } else if (commandLine.hasOption(SERIALIZED_INPUT)) {
+            inputFile = new File(commandLine.getOptionValue(SERIALIZED_INPUT));
             source = Source.SERIALIZED;
         } else {
             inputFile = null;
@@ -84,19 +92,21 @@ public class WikiLinks {
         }
         FileInputStream inputStream = inputFile == null ? null : getInputStream(inputFile);
         File outputFile = null;
-        if (commandLine.hasOption('o')) {
-            outputFile = new File(commandLine.getOptionValue('o'));
+        if (commandLine.hasOption(WRITE_OUTPUT)) {
+            outputFile = new File(commandLine.getOptionValue(WRITE_OUTPUT));
         }
         if (inputStream == null && source != Source.STDIN) {
             System.err.printf("Cannot read file \"%s\". Exiting%n", inputFile);
             System.exit(1);
         }
-        boolean interactive = commandLine.hasOption('i');
-        if (interactive && source == Source.STDIN) {
+        OperationMode mode = OperationMode.NONE;
+        if (commandLine.hasOption(INTERACTIVE_MODE)) mode = OperationMode.INTERACTIVE;
+        if (commandLine.hasOption(BENCHMARK_MODE)) mode = OperationMode.BENCHMARK;
+        if (mode == OperationMode.INTERACTIVE && source == Source.STDIN) {
             System.err.println("Cannot have interactive mode when reading from STDIN");
             System.exit(1);
         }
-        doRun(inputStream, inputFile, outputFile, source, interactive);
+        doRun(inputStream, inputFile, outputFile, source, mode);
     }
 
     private static FileInputStream getInputStream(File file) {
@@ -135,7 +145,7 @@ public class WikiLinks {
         }
     }
 
-    private static void doRun(FileInputStream input, File inputFile, File outputFile, Source source, boolean interactive) {
+    private static void doRun(FileInputStream input, File inputFile, File outputFile, Source source, OperationMode mode) {
         FileOutputStream fos = null;
         if (outputFile != null) {
             if (outputFile.exists()) {
@@ -174,24 +184,25 @@ public class WikiLinks {
             }
             System.out.printf("Finished in %d ms%n", System.currentTimeMillis() - writeStart);
         }
-        if (interactive) {
+        if (mode == OperationMode.INTERACTIVE) {
             try {
                 doInteractive(pages, new BufferedReader(new InputStreamReader(System.in)));
             } catch (IOException e) {
                 handleError(e);
             }
+        } else if (mode == OperationMode.BENCHMARK) {
+            Benchmarking.runBenchmarks(pages, 50);
         }
     }
 
     private static void doInteractive(List<BufferWikiPage> pages, BufferedReader console) throws IOException {
         System.out.println("Staring interactive mode");
-        printStatistics(pages);
+//        printStatistics(pages);
 
         long initStart = System.currentTimeMillis();
         WikiRoutes routes = new WikiRoutes(pages);
         System.out.printf("Initializing routes took %d ms%n", System.currentTimeMillis() - initStart);
-        doInteractiveSearch(routes, console);
-//        doSearch(routes, "Jää", "Vuori");
+        Interactive.doSearch(routes, console);
     }
 
     private static void printStatistics(Collection<? extends LeanWikiPage<?>> pages) {
@@ -202,76 +213,6 @@ public class WikiLinks {
         System.out.printf("The largest amount of links found is %d%n", statistics[2]);
         System.out.printf("Total length of the titles is %d bytes%n", statistics[3]);
         System.out.printf("The longest title is %d bytes%n", statistics[4]);
-    }
-
-    private static String findTarget(WikiRoutes routes, BufferedReader reader, boolean startPoint) throws IOException {
-        final String wildcard = "#";
-        final String randomPage = "<";
-        System.out.printf("Please insert the %s article (Enter empty to both to quit)%n", startPoint ? "starting" : "end");
-        while (true) {
-            System.out.print("> ");
-            String read = reader.readLine();
-            String trimmed = read == null ? "" : read.trim();
-            if (wildcard.equals(trimmed)) {
-                System.out.printf("Must have at last one char before the wildcards%n");
-            } else if (trimmed.endsWith(wildcard)) {
-                String prefix = trimmed.substring(0, trimmed.length() - 1);
-                List<String> matches = routes.findWildcards(prefix, 10);
-                if (matches.isEmpty()) {
-                    System.out.printf("No articles start with %s%n", quote(prefix));
-                } else {
-                    System.out.printf("At least these articles start with %s: %s%n", quote(prefix), Arrays.asList(matches.stream().map(Helpers::quote).toArray()));
-                }
-            } else if (trimmed.equals(randomPage)) {
-                String page = routes.getRandomPage();
-                System.out.printf("Selected \"%s\" as %s page%n", page, startPoint ? "starting" : "end");
-                return page;
-            } else if (!trimmed.isEmpty() && routes.hasPage(trimmed)) {
-                return trimmed;
-            } else {
-                System.out.printf("No page with name %s found. Try wildcards?%n", quote(trimmed));
-
-            }
-        }
-    }
-
-    private static void doInteractiveSearch(WikiRoutes routes, BufferedReader console) throws IOException {
-        while (true) {
-            String start = findTarget(routes, console, true);
-            if (start == null) return;
-            String end = findTarget(routes, console, false);
-            if (end == null) return;
-            doSearch(routes, start, end);
-        }
-    }
-
-    private static void doSearch(WikiRoutes routes, String start, String end) {
-        String result;
-        try {
-            WikiRoutes.Result route = routes.findRoute(start, end);
-            String routeString;
-            if (route.getRoute().isEmpty()) {
-                routeString = "No route found";
-            } else {
-                routeString = "Route: " + Joiner.on(" -> ").join(route.getRoute().stream().map(p -> quote(p.getTitle())).toArray());
-            }
-            result = String.format("%s (in %d ms)", routeString, route.getRuntime());
-        } catch (WikiRoutes.BadRouteException e) {
-            if (e.endExist()) {
-                if (e.startExists()) {
-                    result = String.format("No route found between %s and %s", e.getStartName(), e.getEndName());
-                } else {
-                    result = String.format("Starting point %s does not exists", e.getStartName());
-                }
-            } else {
-                if (e.startExists()) {
-                    result = String.format("End point %s does not exists", e.getEndName());
-                } else {
-                    result = String.format("Neither start point %s or end point %s do exist", e.getStartName(), e.getEndName());
-                }
-            }
-        }
-        System.out.printf("%s%n", result);
     }
 
     public static long[] reportStatistics(Iterable<? extends LeanWikiPage<?>> pages) {

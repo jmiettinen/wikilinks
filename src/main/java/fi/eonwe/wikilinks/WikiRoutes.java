@@ -1,5 +1,6 @@
 package fi.eonwe.wikilinks;
 
+import com.google.common.base.Joiner;
 import com.google.common.collect.Lists;
 import fi.eonwe.wikilinks.leanpages.BufferWikiPage;
 import net.openhft.koloboke.collect.map.hash.HashIntIntMap;
@@ -11,6 +12,8 @@ import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+
+import static fi.eonwe.wikilinks.fibonacciheap.Helpers.quote;
 
 /**
  */
@@ -217,6 +220,11 @@ public class WikiRoutes {
 
         public long getRuntime() {
             return runtime;
+        }
+
+        public String toString() {
+            if (route.isEmpty()) return "No route found";
+            return Joiner.on(" -> ").join(getRoute().stream().map(p -> quote(p.getTitle())).toArray());
         }
 
     }
