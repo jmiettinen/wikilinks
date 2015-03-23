@@ -17,7 +17,7 @@ public class Interactive {
     private static String findTarget(WikiRoutes routes, BufferedReader reader, boolean startPoint) throws IOException {
         final String wildcard = "#";
         final String randomPage = "<";
-        System.out.printf("Please insert the %s article (Enter empty to both to quit)%n", startPoint ? "starting" : "end");
+        System.out.printf("Please type the %s article%n", startPoint ? "starting" : "end");
         while (true) {
             System.out.print("> ");
             String read = reader.readLine();
