@@ -44,10 +44,10 @@ public class RouteFinder {
 
     private static class RouteData {
         public RouteData prev;
-        public final LeanWikiPage page;
+        public final int pageId;
 
-        private RouteData(LeanWikiPage page) {
-            this.page = page;
+        private RouteData(int pageId) {
+            this.pageId = pageId;
         }
     }
 
@@ -55,7 +55,7 @@ public class RouteFinder {
         final int shiftedId = shift(articleId);
         FibonacciHeapNode<RouteData> node = nodes.get(shiftedId);
         if (node == null) {
-            node = new FibonacciHeapNode<>(new RouteData(mapper.getForId(articleId)));
+            node = new FibonacciHeapNode<>(new RouteData(articleId));
             nodes.put(shiftedId, node);
             heap.insert(node, Double.POSITIVE_INFINITY);
         }
@@ -68,9 +68,9 @@ public class RouteFinder {
         while (!heap.isEmpty()) {
             FibonacciHeapNode<RouteData> min = heap.removeMin();
             final double distance = min.getKey();
-            LeanWikiPage page = min.getData().page;
-            if (page.getId() == endId) return recordRoute(min.getData());
-            page.forEachLink(linkTarget -> {
+            int pageId = min.getData().pageId;
+            if (pageId == endId) return recordRoute(min.getData());
+            mapper.getForId(pageId).forEachLink(linkTarget -> {
                 FibonacciHeapNode<RouteData> node = getNode(linkTarget);
                 final double newDistance = distance + 1.0;
                 if (newDistance < node.getKey()) {
@@ -86,7 +86,7 @@ public class RouteFinder {
         List<Integer> list = Lists.newArrayList();
         RouteData cur = endPoint;
         while (cur != null) {
-            list.add(cur.page.getId());
+            list.add(cur.pageId);
             cur = cur.prev;
         }
         Collections.reverse(list);

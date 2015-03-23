@@ -58,9 +58,9 @@ public class WikiRoutes {
         if (page == null) return Collections.emptyList();
         List<String> names = Lists.newArrayList();
         page.forEachLink(id -> {
-            int idIndex = getIndex(id);
-            if (idIndex >= 0) {
-                names.add(pages.get(idIndex).getTitle());
+            BufferWikiPage linkedPage = getIndex(id);
+            if (linkedPage != null) {
+                names.add(linkedPage.getTitle());
             }
         });
         return names;
@@ -70,10 +70,7 @@ public class WikiRoutes {
         long startTime = System.currentTimeMillis();
         PageMapper mapper = createMapper();
         int[] route = RouteFinder.find(startPage.getId(), endPage.getId(), mapper);
-        List<BufferWikiPage> path = Arrays.asList(Arrays.stream(route).mapToObj(id -> {
-            int index = getIndex(id);
-            return pages.get(index);
-        }).toArray(BufferWikiPage[]::new));
+        List<BufferWikiPage> path = Arrays.asList(Arrays.stream(route).mapToObj(this::getIndex).toArray(BufferWikiPage[]::new));
         return new Result(path, System.currentTimeMillis() - startTime);
     }
 
@@ -81,7 +78,7 @@ public class WikiRoutes {
         long startTime = System.currentTimeMillis();
         logger.info("Starting to construct id -> index map");
         HashIntIntMap map = HashIntIntMaps.getDefaultFactory()
-                .withHashConfig(HashConfig.fromLoads(0.1, 0.4, 0.7))
+                .withHashConfig(HashConfig.fromLoads(0.1, 0.5, 0.75))
                 .withKeysDomain(Integer.MIN_VALUE, -1)
                 .newImmutableMap(mapCreator -> {
                     for (int i = 0; i < pages.size(); i++) {
@@ -185,9 +182,13 @@ public class WikiRoutes {
         return -val - 1;
     }
 
-    private int getIndex(int id) {
+    private BufferWikiPage getIndex(int id) {
         int ix = idIndexMap.getOrDefault(shift(id), -1);
-        return ix;
+        if (ix >= 0 && ix < pages.size()) {
+            return pages.get(ix);
+        } else {
+            return null;
+        }
     }
 
     public static interface PageMapper {
@@ -198,11 +199,7 @@ public class WikiRoutes {
         return new PageMapper() {
             @Override
             public BufferWikiPage getForId(int id) {
-                int ix = getIndex(id);
-                if (ix < 0 || ix >= pages.size()) {
-                    return null;
-                }
-                return pages.get(ix);
+                return getIndex(id);
             }
         };
     }
