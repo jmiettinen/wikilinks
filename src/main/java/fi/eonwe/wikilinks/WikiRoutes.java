@@ -3,6 +3,7 @@ package fi.eonwe.wikilinks;
 import com.google.common.base.Joiner;
 import com.google.common.collect.Lists;
 import fi.eonwe.wikilinks.leanpages.BufferWikiPage;
+import net.openhft.koloboke.collect.hash.HashConfig;
 import net.openhft.koloboke.collect.map.hash.HashIntIntMap;
 import net.openhft.koloboke.collect.map.hash.HashIntIntMaps;
 
@@ -20,8 +21,7 @@ import static fi.eonwe.wikilinks.fibonacciheap.Helpers.quote;
 public class WikiRoutes {
 
     private final List<BufferWikiPage> pages;
-    private final long[] indexArray;
-//    private final HashIntIntMap idIndexMap;
+    private final HashIntIntMap idIndexMap;
 
     private static final Logger logger = Logger.getLogger(WikiRoutes.class.getCanonicalName());
     static {
@@ -30,8 +30,7 @@ public class WikiRoutes {
 
     public WikiRoutes(List<BufferWikiPage> pages) {
         this.pages = constructSortedNames(pages);
-        this.indexArray = createPackedArray(pages);
-//        this.idIndexMap = constructIdIndexMap(pages);
+        this.idIndexMap = constructIdIndexMap(pages);
     }
 
     public Result findRoute(String startPage, String endPage) throws BadRouteException {
@@ -82,6 +81,7 @@ public class WikiRoutes {
         long startTime = System.currentTimeMillis();
         logger.info("Starting to construct id -> index map");
         HashIntIntMap map = HashIntIntMaps.getDefaultFactory()
+                .withHashConfig(HashConfig.fromLoads(0.1, 0.4, 0.7))
                 .withKeysDomain(Integer.MIN_VALUE, -1)
                 .newImmutableMap(mapCreator -> {
                     for (int i = 0; i < pages.size(); i++) {
@@ -102,15 +102,6 @@ public class WikiRoutes {
             logger.info(() -> String.format("Took %d ms to sort names", System.currentTimeMillis() - startTime));
         }
         return pages;
-    }
-
-    private static long[] createPackedArray(List<BufferWikiPage> sortedPages) {
-        long[] array = new long[sortedPages.size()];
-        for (int i = 0; i < array.length; i++) {
-            array[i] = packToLong(sortedPages.get(i).getId(), i);
-        }
-        Arrays.sort(array);
-        return array;
     }
 
     private static boolean isSorted(List<BufferWikiPage> pagesArray) {
@@ -195,7 +186,7 @@ public class WikiRoutes {
     }
 
     private int getIndex(int id) {
-        int ix = binarySearch(indexArray, 0, indexArray.length, id);
+        int ix = idIndexMap.getOrDefault(shift(id), -1);
         return ix;
     }
 
@@ -238,36 +229,6 @@ public class WikiRoutes {
             if (route.isEmpty()) return "No route found";
             return Joiner.on(" -> ").join(getRoute().stream().map(p -> quote(p.getTitle())).toArray());
         }
-    }
-
-    private static int binarySearch(long[] packedArr, int fromIndex, int toIndex, int key) {
-        int low = fromIndex;
-        int high = toIndex - 1;
-
-        while (low <= high) {
-            int mid = (low + high) >>> 1;
-            int midVal = getId(packedArr[mid]);
-
-            if (midVal < key)
-                low = mid + 1;
-            else if (midVal > key)
-                high = mid - 1;
-            else
-                return getIndex(packedArr[mid]);
-        }
-        return -1;
-    }
-
-    private static long packToLong(int id, int ix) {
-        return ((long) id) << 32 | ix;
-    }
-
-    private static int getIndex(long packedLong) {
-        return (int) packedLong;
-    }
-
-    private static int getId(long packedLong) {
-        return (int) (packedLong >>> 32);
     }
 
 }
