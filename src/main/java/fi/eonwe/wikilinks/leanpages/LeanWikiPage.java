@@ -1,13 +1,7 @@
 package fi.eonwe.wikilinks.leanpages;
 
-import com.google.common.collect.Lists;
-
 import java.nio.ByteBuffer;
-import java.util.Collection;
-import java.util.Comparator;
-import java.util.List;
 import java.util.function.IntConsumer;
-import java.util.function.LongConsumer;
 
 /**
  */

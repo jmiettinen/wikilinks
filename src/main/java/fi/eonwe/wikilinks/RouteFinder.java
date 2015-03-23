@@ -21,9 +21,9 @@ public class RouteFinder {
             .newMutableMap(65536);
     private final int startId;
     private final int endId;
-    private final WikiRoutes.PageMapper<?> mapper;
+    private final WikiRoutes.PageMapper mapper;
 
-    private RouteFinder(int startId, int endId, WikiRoutes.PageMapper<?> mapper) {
+    private RouteFinder(int startId, int endId, WikiRoutes.PageMapper mapper) {
         this.mapper = mapper;
         this.startId = startId;
         this.endId = endId;
@@ -31,7 +31,7 @@ public class RouteFinder {
         setup(startId);
     }
 
-    public static int[] find(int startId, int endId, WikiRoutes.PageMapper<?> mapper) {
+    public static int[] find(int startId, int endId, WikiRoutes.PageMapper mapper) {
         RouteFinder finder = new RouteFinder(startId, endId, mapper);
         int[] route = finder.find();
         return route;
