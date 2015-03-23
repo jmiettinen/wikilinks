@@ -1,8 +1,8 @@
-package fi.eonwe.wikilinks;
+package fi.eonwe.wikilinks.fatpages;
 
 /**
 */
-class PagePointer {
+public class PagePointer {
 
     private static int counter = 0;
 

@@ -1,6 +1,11 @@
 package fi.eonwe.wikilinks;
 
 import com.google.common.collect.Lists;
+import fi.eonwe.wikilinks.fatpages.PagePointer;
+import fi.eonwe.wikilinks.fatpages.WikiPage;
+import fi.eonwe.wikilinks.fatpages.WikiPageData;
+import fi.eonwe.wikilinks.fatpages.WikiRedirectPage;
+import fi.eonwe.wikilinks.leanpages.BufferWikiPage;
 import info.bliki.wiki.dump.IArticleFilter;
 import info.bliki.wiki.dump.Siteinfo;
 import info.bliki.wiki.dump.WikiArticle;
@@ -21,13 +26,13 @@ import java.util.Map;
  */
 public class WikiProcessor {
 
-    public static List<PackedWikiPage> readPages(InputStream input) {
+    public static List<BufferWikiPage> readPages(InputStream input) {
         WikiProcessor processor = new WikiProcessor();
         HashObjObjMap<String, PagePointer> pages = processor.preProcess(input);
 //        printStatistics(pages);
-        WikiProcessor.resolveRedirects(pages);
+        WikiProcessor.dropRedirectLoops(pages);
 //        printStatistics(pages);
-        List<PackedWikiPage> packedPages = WikiProcessor.packPages(pages);
+        List<BufferWikiPage> packedPages = WikiProcessor.packPages(pages);
         return packedPages;
     }
 
@@ -41,7 +46,7 @@ public class WikiProcessor {
                         String text = article.getText();
                         if (text == null) text = "";
                         WikiPatternMatcher matcher = new WikiPatternMatcher(text);
-                        long id = Long.parseLong(article.getId());
+                        int id = Integer.parseInt(article.getId());
                         WikiPage page;
                         if (matcher.isRedirect()) {
                             page = new WikiRedirectPage(article.getTitle().intern(), id, matcher.getRedirectText().intern());
@@ -90,8 +95,28 @@ public class WikiProcessor {
         }
     }
 
-    public static void resolveRedirects(HashObjObjMap<String, PagePointer> map) {
-        map.values().stream().filter(p -> p.page != null && p.page.isRedirect()).forEach(p -> p.page = resolveUltimateTarget(p, map, null));
+    public static void dropRedirectLoops(HashObjObjMap<String, PagePointer> map) {
+        map.values().stream().filter(p -> p.page != null && p.page.isRedirect()).forEach(p -> p.page = endSomewhere(p, map, null) ? p.page : null);
+    }
+
+    private static boolean endSomewhere(PagePointer redirect, HashObjObjMap<String, PagePointer> map, IdentityHashMap<WikiPage, Boolean> visited) {
+        WikiPage immediateTarget = redirect.page;
+        if (immediateTarget == null || !(immediateTarget instanceof WikiRedirectPage)) return true;
+        if (visited == null) {
+            visited = new IdentityHashMap<>();
+        }
+        if (visited.containsKey(immediateTarget)) {
+            return false;
+        } else {
+            visited.put(immediateTarget, Boolean.TRUE);
+        }
+        WikiRedirectPage redirectPage = (WikiRedirectPage) immediateTarget;
+        PagePointer redirectPointer = map.get(redirectPage.getTarget());
+        if (redirectPointer == null) {
+            return false;
+        } else {
+            return endSomewhere(redirectPointer, map, visited);
+        }
     }
 
     private static WikiPage resolveUltimateTarget(PagePointer redirect, HashObjObjMap<String, PagePointer> map, IdentityHashMap<WikiPage, Boolean> visited) {
@@ -154,17 +179,33 @@ public class WikiProcessor {
                 nullLinkCount);
     }
 
-    private static final long[] EMPTY_ARRAY = new long[0];
+    private static final int[] EMPTY_ARRAY = new int[0];
 
-    public static List<PackedWikiPage> packPages(HashObjObjMap<String, PagePointer> map) {
-        List<PackedWikiPage> list = Lists.newArrayListWithCapacity(map.size());
+    public static List<BufferWikiPage> packPages(HashObjObjMap<String, PagePointer> map) {
+        List<BufferWikiPage> list = Lists.newArrayListWithCapacity(map.size());
         map.forEach((title, ptr) -> {
-            WikiPageData page = (WikiPageData) ptr.page;
+            WikiPage page = ptr.page;
             if (page != null) {
-                long[] links = Arrays.stream(page.getLinks()).filter(p -> p.page != null).mapToLong(p -> p.page.getId()).distinct().toArray();
-                Arrays.sort(links);
-                if (links.length == 0) links = EMPTY_ARRAY;
-                PackedWikiPage packedPage = new PackedWikiPage(page.getId(), links, title);
+                int[] links;
+                boolean isRedirect;
+                if (page instanceof WikiRedirectPage) {
+                    WikiRedirectPage redirectPage = (WikiRedirectPage) page;
+                    String target = redirectPage.getTarget();
+                    PagePointer pagePointer = map.get(target);
+                    if (pagePointer == null || pagePointer.page == null) {
+                        links = EMPTY_ARRAY;
+                    } else {
+                        links = new int[] { pagePointer.page.getId() };
+                    }
+                    isRedirect = true;
+                } else {
+                    WikiPageData pageData = (WikiPageData) page;
+                    links = Arrays.stream(pageData.getLinks()).filter(p -> p.page != null).mapToInt(p -> p.page.getId()).distinct().toArray();
+                    if (links.length == 0) links = EMPTY_ARRAY;
+                    Arrays.sort(links);
+                    isRedirect = false;
+                }
+                BufferWikiPage packedPage = BufferWikiPage.createFrom(page.getId(), links, title, isRedirect);
                 list.add(packedPage);
             }
         });

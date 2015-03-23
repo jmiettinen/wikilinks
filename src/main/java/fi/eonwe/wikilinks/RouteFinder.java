@@ -1,12 +1,12 @@
 package fi.eonwe.wikilinks;
 
 import com.google.common.collect.Lists;
-import com.google.common.primitives.Longs;
-import net.openhft.koloboke.collect.map.hash.HashLongIntMap;
-import net.openhft.koloboke.collect.map.hash.HashLongObjMap;
-import net.openhft.koloboke.collect.map.hash.HashLongObjMaps;
-import org.jgrapht.util.FibonacciHeap;
-import org.jgrapht.util.FibonacciHeapNode;
+import com.google.common.primitives.Ints;
+import fi.eonwe.wikilinks.fibonacciheap.FibonacciHeap;
+import fi.eonwe.wikilinks.fibonacciheap.FibonacciHeapNode;
+import fi.eonwe.wikilinks.leanpages.LeanWikiPage;
+import net.openhft.koloboke.collect.map.hash.HashIntObjMap;
+import net.openhft.koloboke.collect.map.hash.HashIntObjMaps;
 
 import java.util.Collections;
 import java.util.List;
@@ -16,36 +16,30 @@ import java.util.List;
 public class RouteFinder {
 
     private final FibonacciHeap<RouteData> heap;
-    private final HashLongObjMap<FibonacciHeapNode<RouteData>> nodes = HashLongObjMaps.newMutableMap();
-    private final HashLongIntMap idIndexMap;
-    private final List<? extends LeanWikiPage> graph;
-    private final long startId;
-    private final long endId;
+    private final HashIntObjMap<FibonacciHeapNode<RouteData>> nodes = HashIntObjMaps.getDefaultFactory()
+            .withKeysDomain(Integer.MIN_VALUE, -1)
+            .newMutableMap(65536);
+    private final int startId;
+    private final int endId;
+    private final WikiRoutes.PageMapper<?> mapper;
 
-    private RouteFinder(long startId, long endId, List<? extends LeanWikiPage> graph, HashLongIntMap idIndexMap) {
-        this.graph = graph;
-        this.idIndexMap = idIndexMap;
+    private RouteFinder(int startId, int endId, WikiRoutes.PageMapper<?> mapper) {
+        this.mapper = mapper;
         this.startId = startId;
         this.endId = endId;
         this.heap = new FibonacciHeap<>();
         setup(startId);
     }
 
-    public static long[] find(long startId, long endId, List<? extends LeanWikiPage> graph, HashLongIntMap idIndexMap) {
-        RouteFinder finder = new RouteFinder(startId, endId, graph, idIndexMap);
-        long[] route = finder.find();
+    public static int[] find(int startId, int endId, WikiRoutes.PageMapper<?> mapper) {
+        RouteFinder finder = new RouteFinder(startId, endId, mapper);
+        int[] route = finder.find();
         return route;
     }
 
-    private void setup(long startId) {
+    private void setup(int startId) {
         FibonacciHeapNode<RouteData> node = getNode(startId);
         heap.insert(node, 0.0);
-    }
-
-    private LeanWikiPage forId(long id) {
-        int index = idIndexMap.getOrDefault(id, -1);
-        if (index < 0 || index >= graph.size()) return null;
-        return graph.get(index);
     }
 
     private static class RouteData {
@@ -57,17 +51,20 @@ public class RouteFinder {
         }
     }
 
-    private FibonacciHeapNode<RouteData> getNode(long articleId) {
-        FibonacciHeapNode<RouteData> node = nodes.getOrDefault(articleId, null);
+    private FibonacciHeapNode<RouteData> getNode(int articleId) {
+        final int shiftedId = shift(articleId);
+        FibonacciHeapNode<RouteData> node = nodes.get(shiftedId);
         if (node == null) {
-            node = new FibonacciHeapNode<>(new RouteData(forId(articleId)), Double.POSITIVE_INFINITY);
-            nodes.put(articleId, node);
-            heap.insert(node, node.getKey());
+            node = new FibonacciHeapNode<>(new RouteData(mapper.getForId(articleId)));
+            nodes.put(shiftedId, node);
+            heap.insert(node, Double.POSITIVE_INFINITY);
         }
         return node;
     }
 
-    private long[] find() {
+    private static int shift(int value) { return (-value) - 1; }
+
+    private int[] find() {
         while (!heap.isEmpty()) {
             FibonacciHeapNode<RouteData> min = heap.removeMin();
             final double distance = min.getKey();
@@ -82,19 +79,17 @@ public class RouteFinder {
                 }
             });
         }
-        return new long[0];
+        return new int[0];
     }
 
-    private long[] recordRoute(RouteData endPoint) {
-        List<Long> list = Lists.newArrayList();
+    private int[] recordRoute(RouteData endPoint) {
+        List<Integer> list = Lists.newArrayList();
         RouteData cur = endPoint;
         while (cur != null) {
             list.add(cur.page.getId());
             cur = cur.prev;
         }
         Collections.reverse(list);
-        return Longs.toArray(list);
+        return Ints.toArray(list);
     }
-
-
 }

@@ -1,21 +1,15 @@
-package fi.eonwe.wikilinks;
-
-import com.google.common.base.Charsets;
-import com.google.common.collect.Lists;
-
-import java.util.Collections;
-import java.util.List;
+package fi.eonwe.wikilinks.fatpages;
 
 /**
  */
 public class WikiPageData implements WikiPage {
 
     private final String title;
-    private final long id;
+    private final int id;
     private final PagePointer[] links;
 //    private final byte[] links;
 
-    public WikiPageData(String title, long id, PagePointer[] links) {
+    public WikiPageData(String title, int id, PagePointer[] links) {
         this.title = title;
         this.id = id;
         this.links = links;
@@ -27,7 +21,7 @@ public class WikiPageData implements WikiPage {
         return false;
     }
 
-    public long getId() { return id; }
+    public int getId() { return id; }
     public String getTitle() { return title; }
     public PagePointer[] getLinks() { return links; }
 }

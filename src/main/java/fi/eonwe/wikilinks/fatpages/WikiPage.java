@@ -1,11 +1,11 @@
-package fi.eonwe.wikilinks;
+package fi.eonwe.wikilinks.fatpages;
 
 /**
  */
 public interface WikiPage {
 
     boolean isRedirect();
-    long getId();
+    int getId();
     String getTitle();
 
 }

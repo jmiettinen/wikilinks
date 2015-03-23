@@ -3,8 +3,15 @@ package fi.eonwe.wikilinks;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
+import fi.eonwe.wikilinks.fatpages.PagePointer;
+import fi.eonwe.wikilinks.fatpages.WikiPage;
+import fi.eonwe.wikilinks.fatpages.WikiPageData;
+import fi.eonwe.wikilinks.fatpages.WikiRedirectPage;
+import fi.eonwe.wikilinks.leanpages.BufferWikiPage;
+import fi.eonwe.wikilinks.leanpages.BufferWikiSerialization;
 import net.openhft.koloboke.collect.map.hash.HashObjObjMap;
 import net.openhft.koloboke.collect.map.hash.HashObjObjMaps;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import java.io.ByteArrayOutputStream;
@@ -12,14 +19,15 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.WritableByteChannel;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Consumer;
 
 import static org.hamcrest.CoreMatchers.*;
 import static org.hamcrest.MatcherAssert.*;
@@ -58,6 +66,7 @@ public class WikiLinksTest {
         }
     }
 
+    @Ignore("Rethinking redirects")
     @Test
     public void itResolvesRedirects() {
         Map<String, PagePointer> map = Maps.newHashMap();
@@ -67,7 +76,7 @@ public class WikiLinksTest {
         for (WikiPage page : new WikiPage[] { fooDir, foofooDir, fooPage}) {
             map.put(page.getTitle(), new PagePointer(page));
         }
-        WikiProcessor.resolveRedirects(convert(map));
+        WikiProcessor.dropRedirectLoops(convert(map));
         assertThat(map.get(fooDir.getTitle()).page, is(equalTo(fooPage)));
         assertThat(map.get(foofooDir.getTitle()).page, is(equalTo(fooPage)));
     }
@@ -82,10 +91,15 @@ public class WikiLinksTest {
         for (WikiPage page : new WikiPage[] { fooDir, foofooDir, foofoofooDir, fooPage}) {
             map.put(page.getTitle(), new PagePointer(page));
         }
-        WikiProcessor.resolveRedirects(convert(map));
-        assertThat(map.get(fooDir.getTitle()).page, is(nullValue()));
-        assertThat(map.get(foofooDir.getTitle()).page, is(nullValue()));
-        assertThat(map.get(foofoofooDir.getTitle()).page, is(nullValue()));
+        WikiProcessor.dropRedirectLoops(convert(map));
+        final int[] nonNullCount = {0};
+        Arrays.asList(fooDir, foofooDir, foofoofooDir).forEach(new Consumer<WikiRedirectPage>() {
+            @Override
+            public void accept(WikiRedirectPage wikiRedirectPage) {
+                if (map.get(wikiRedirectPage.getTitle()).page != null) nonNullCount[0]++;
+            }
+        });
+        assertThat(nonNullCount[0], is(2));
     }
 
     private HashObjObjMap<String, PagePointer> convert(Map<String, PagePointer> map) {
@@ -96,12 +110,11 @@ public class WikiLinksTest {
     public void itPacksPagesCorrectly() throws Exception {
         Map<String, PagePointer> map = createSimpleDenseGraph(4, "title_");
         assertThat(map.size(), is(equalTo(4)));
-        List<PackedWikiPage> packedWikiPages = WikiProcessor.packPages(convert(map));
+        List<BufferWikiPage> packedWikiPages = WikiProcessor.packPages(convert(map));
         for (int i = 0; i < map.size(); i++) {
-            PackedWikiPage page = packedWikiPages.get(i);
-            assertThat(page.getId(), is(equalTo(Long.valueOf(i))));
+            BufferWikiPage page = packedWikiPages.get(i);
+            assertThat(page.getId(), is(equalTo(Integer.valueOf(i))));
             assertThat(page.getTitle(), is(equalTo("title_" + i)));
-            assertThat(page.getLength(), is(equalTo(getLength(page))));
         }
     }
 
@@ -131,12 +144,26 @@ public class WikiLinksTest {
     }
 
     @Test
+    public void sortByTitle() throws IOException {
+        final String prefix = "foo_title_";
+        List<BufferWikiPage> originals = WikiProcessor.packPages(convert(createSimpleDenseGraph(512, prefix)));
+        String[] titles = originals.stream().map(BufferWikiPage::getTitle).toArray(String[]::new);
+        Arrays.sort(titles);
+        Arrays.stream(titles).forEach(t -> assertThat(t, startsWith(prefix)));
+        List<BufferWikiPage> deserialized = serializeAndDeserialize(originals);
+        Collections.sort(deserialized);
+        for (int i = 0; i < titles.length; i++) {
+            assertThat(deserialized.get(i).getTitle(), is(equalTo(titles[i])));
+        }
+    }
+
+    @Test
     public void packingRemovesDuplicates() {
         final String prefix = "foo_title_";
-        List<PackedWikiPage> readFromXml = WikiProcessor.packPages(convert(createSimpleDenseGraph(4, prefix, true)));
+        List<BufferWikiPage> readFromXml = WikiProcessor.packPages(convert(createSimpleDenseGraph(4, prefix, true)));
         readFromXml.forEach(p -> {
-            long[] links = p.getLinks();
-            Set<Long> set = Sets.newHashSet();
+            Set<Integer> set = Sets.newHashSet();
+            int[] links = p.getLinks();
             Arrays.stream(links).forEach(set::add);
             assertThat(links.length, is(equalTo(set.size())));
         });
@@ -145,23 +172,32 @@ public class WikiLinksTest {
     @Test
     public void deserializeEqualsUnserialized() throws IOException {
         final String prefix = "foo_title_";
-        List<PackedWikiPage> readFromXml = WikiProcessor.packPages(convert(createSimpleDenseGraph(512, prefix)));
-        ByteArrayListChannel channel = new ByteArrayListChannel();
-        List<PackedWikiPage> read = readFromXml;
+        List<BufferWikiPage> originals = WikiProcessor.packPages(convert(createSimpleDenseGraph(512, prefix)));
+        List<BufferWikiPage> read = originals;
+        BufferWikiSerialization serializer = new BufferWikiSerialization();
         for (int i = 0; i < 5; i++) {
-            WikiSerialization.serialize(read, channel);
+            ByteArrayListChannel channel = new ByteArrayListChannel();
+            serializer.serialize(read, channel);
             ByteBuffer input = ByteBuffer.wrap(channel.bos.toByteArray());
-            read = WikiSerialization.deserialize(input);
+            read = serializer.readFromSerialized(input);
         }
 
-        assertThat(read.size(), is(readFromXml.size()));
+        assertThat(read.size(), is(originals.size()));
         for (int i = 0; i < read.size(); i++) {
-            PackedWikiPage fromXml = readFromXml.get(i);
-            PackedWikiPage deserialized = read.get(i);
+            BufferWikiPage fromXml = originals.get(i);
+            BufferWikiPage deserialized = read.get(i);
             assertThat(deserialized.getTitle(), is(equalTo(fromXml.getTitle())));
             assertThat(deserialized.getTitle(), startsWith(prefix));
             assertThat(deserialized, is(equalTo(fromXml)));
         }
+    }
+
+    private static List<BufferWikiPage> serializeAndDeserialize(List<BufferWikiPage> pages) throws IOException {
+        BufferWikiSerialization serializer = new BufferWikiSerialization();
+        ByteArrayListChannel channel = new ByteArrayListChannel();
+        serializer.serialize(pages, channel);
+        ByteBuffer input = ByteBuffer.wrap(channel.bos.toByteArray());
+        return serializer.readFromSerialized(input);
     }
 
     @Test
@@ -169,30 +205,24 @@ public class WikiLinksTest {
         File tmpFile = File.createTempFile("disk-serialization-test", "tmp");
         tmpFile.deleteOnExit();
         final String prefix = "foo_title_";
-        List<PackedWikiPage> readFromXml = WikiProcessor.packPages(convert(createSimpleDenseGraph(512, prefix)));
+        List<BufferWikiPage> readFromXml = WikiProcessor.packPages(convert(createSimpleDenseGraph(512, prefix)));
+        BufferWikiSerialization serializer = new BufferWikiSerialization();
         FileOutputStream fos = new FileOutputStream(tmpFile);
-        WikiSerialization.serialize(readFromXml, fos.getChannel());
+        serializer.serialize(readFromXml, fos.getChannel());
         fos.close();
         FileInputStream fin = new FileInputStream(tmpFile);
         FileChannel fc = fin.getChannel();
         long size = fc.size();
-        List<PackedWikiPage> readFromFile = WikiSerialization.readFromSerialized(fc);
+        List<BufferWikiPage> readFromFile = serializer.readFromSerialized(fc);
 
         assertThat(readFromFile.size(), is(readFromXml.size()));
         for (int i = 0; i < readFromXml.size(); i++) {
-            PackedWikiPage fromXml = readFromXml.get(i);
-            PackedWikiPage deserialized = readFromFile.get(i);
+            BufferWikiPage fromXml = readFromXml.get(i);
+            BufferWikiPage deserialized = readFromFile.get(i);
             assertThat(deserialized.getTitle(), is(equalTo(fromXml.getTitle())));
             assertThat(deserialized.getTitle(), startsWith(prefix));
             assertThat(deserialized, is(equalTo(fromXml)));
         }
-    }
-
-
-    private int getLength(PackedWikiPage page) throws NoSuchFieldException, IllegalAccessException {
-        Field f = page.getClass().getDeclaredField("data");
-        f.setAccessible(true);
-        return ((ByteBuffer) f.get(page)).capacity();
     }
 
 }
