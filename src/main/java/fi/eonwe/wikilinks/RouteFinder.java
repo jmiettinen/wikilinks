@@ -4,10 +4,6 @@ import com.google.common.collect.Lists;
 import com.google.common.primitives.Ints;
 import fi.eonwe.wikilinks.fibonacciheap.FibonacciHeap;
 import fi.eonwe.wikilinks.fibonacciheap.FibonacciHeapNode;
-import fi.eonwe.wikilinks.leanpages.LeanWikiPage;
-import net.openhft.koloboke.collect.hash.HashConfig;
-import net.openhft.koloboke.collect.map.hash.HashIntObjMap;
-import net.openhft.koloboke.collect.map.hash.HashIntObjMaps;
 
 import java.util.Collections;
 import java.util.List;
@@ -17,24 +13,22 @@ import java.util.List;
 public class RouteFinder {
 
     private final FibonacciHeap<RouteData> heap;
-    private final HashIntObjMap<FibonacciHeapNode<RouteData>> nodes = HashIntObjMaps.getDefaultFactory()
-            .withHashConfig(HashConfig.fromLoads(0.1, 0.5, 0.75))
-            .withKeysDomain(Integer.MIN_VALUE, -1)
-            .newMutableMap(1 << 17);
-    private final int startId;
-    private final int endId;
+    private FibonacciHeapNode[] nodes;
+    private final int startIndex;
+    private final int endIndex;
     private final WikiRoutes.PageMapper mapper;
 
-    private RouteFinder(int startId, int endId, WikiRoutes.PageMapper mapper) {
+    private RouteFinder(int startIndex, int endIndex, WikiRoutes.PageMapper mapper) {
         this.mapper = mapper;
-        this.startId = startId;
-        this.endId = endId;
+        this.startIndex = startIndex;
+        this.endIndex = endIndex;
         this.heap = new FibonacciHeap<>();
-        setup(startId);
+        this.nodes = new FibonacciHeapNode[mapper.getSize()];
+        setup(startIndex);
     }
 
-    public static int[] find(int startId, int endId, WikiRoutes.PageMapper mapper) {
-        RouteFinder finder = new RouteFinder(startId, endId, mapper);
+    public static int[] find(int startIndex, int endIndex, WikiRoutes.PageMapper mapper) {
+        RouteFinder finder = new RouteFinder(startIndex, endIndex, mapper);
         int[] route = finder.find();
         return route;
     }
@@ -46,38 +40,36 @@ public class RouteFinder {
 
     private static class RouteData {
         public RouteData prev;
-        public final int pageId;
+        public final int linkIndex;
 
-        private RouteData(int pageId) {
-            this.pageId = pageId;
+        private RouteData(int linkIndex) {
+            this.linkIndex = linkIndex;
         }
     }
 
-    private FibonacciHeapNode<RouteData> getNode(int articleId) {
-        final int shiftedId = shift(articleId);
-        FibonacciHeapNode<RouteData> node = nodes.get(shiftedId);
+    private FibonacciHeapNode<RouteData> getNode(int linkIndex) {
+        @SuppressWarnings("unchecked")
+        FibonacciHeapNode<RouteData> node = nodes[linkIndex];
         if (node == null) {
-            node = new FibonacciHeapNode<>(new RouteData(articleId));
-            nodes.put(shiftedId, node);
+            node = new FibonacciHeapNode<>(new RouteData(linkIndex));
+            nodes[linkIndex] = node;
             heap.insert(node, Double.POSITIVE_INFINITY);
         }
         return node;
     }
 
-    private static int shift(int value) { return (-value) - 1; }
-
     private int[] find() {
         while (!heap.isEmpty()) {
             FibonacciHeapNode<RouteData> min = heap.removeMin();
-            final double distance = min.getKey();
-            int pageId = min.getData().pageId;
-            if (pageId == endId) return recordRoute(min.getData());
-            mapper.getForId(pageId).forEachLink(linkTarget -> {
-                FibonacciHeapNode<RouteData> node = getNode(linkTarget);
-                final double newDistance = distance + 1.0;
+            RouteData data = min.getData();
+            final double newDistance = min.getKey() + 1.0;
+            int pageIndex = data.linkIndex;
+            if (pageIndex == endIndex) return recordRoute(data);
+            mapper.getForIndex(pageIndex).forEachLinkIndex(linkIndex -> {
+                FibonacciHeapNode<RouteData> node = getNode(linkIndex);
                 if (newDistance < node.getKey()) {
                     heap.decreaseKey(node, newDistance);
-                    node.getData().prev = min.getData();
+                    node.getData().prev = data;
                 }
             });
         }
@@ -88,7 +80,7 @@ public class RouteFinder {
         List<Integer> list = Lists.newArrayList();
         RouteData cur = endPoint;
         while (cur != null) {
-            list.add(cur.pageId);
+            list.add(cur.linkIndex);
             cur = cur.prev;
         }
         Collections.reverse(list);
