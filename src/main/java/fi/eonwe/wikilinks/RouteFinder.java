@@ -5,6 +5,7 @@ import com.google.common.primitives.Ints;
 import fi.eonwe.wikilinks.fibonacciheap.FibonacciHeap;
 import fi.eonwe.wikilinks.fibonacciheap.FibonacciHeapNode;
 import fi.eonwe.wikilinks.leanpages.LeanWikiPage;
+import net.openhft.koloboke.collect.hash.HashConfig;
 import net.openhft.koloboke.collect.map.hash.HashIntObjMap;
 import net.openhft.koloboke.collect.map.hash.HashIntObjMaps;
 
@@ -17,8 +18,9 @@ public class RouteFinder {
 
     private final FibonacciHeap<RouteData> heap;
     private final HashIntObjMap<FibonacciHeapNode<RouteData>> nodes = HashIntObjMaps.getDefaultFactory()
+            .withHashConfig(HashConfig.fromLoads(0.1, 0.5, 0.75))
             .withKeysDomain(Integer.MIN_VALUE, -1)
-            .newMutableMap(65536);
+            .newMutableMap(1 << 17);
     private final int startId;
     private final int endId;
     private final WikiRoutes.PageMapper mapper;
