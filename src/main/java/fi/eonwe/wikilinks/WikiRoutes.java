@@ -16,7 +16,7 @@ import java.util.function.IntFunction;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import static fi.eonwe.wikilinks.fibonacciheap.Helpers.quote;
+import static fi.eonwe.wikilinks.Helpers.quote;
 
 /**
  */

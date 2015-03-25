@@ -1,14 +1,11 @@
 package fi.eonwe.wikilinks;
 
-import com.google.common.base.Joiner;
-import fi.eonwe.wikilinks.fibonacciheap.Helpers;
-
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 
-import static fi.eonwe.wikilinks.fibonacciheap.Helpers.quote;
+import static fi.eonwe.wikilinks.Helpers.quote;
 
 /**
  */

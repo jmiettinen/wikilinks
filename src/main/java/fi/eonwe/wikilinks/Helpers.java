@@ -1,4 +1,4 @@
-package fi.eonwe.wikilinks.fibonacciheap;
+package fi.eonwe.wikilinks;
 
 /**
  */
