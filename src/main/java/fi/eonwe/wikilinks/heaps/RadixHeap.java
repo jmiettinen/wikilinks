@@ -15,11 +15,8 @@ public class RadixHeap {
 
     private final int bucketMinSize;
     private LongArrayList[] buckets = new LongArrayList[33];
-    private LongArrayList tempArray = new LongArrayList();
     private int lastDeleted = 0;
     private int size = 0;
-
-    private static int NOT_SET = -1;
 
     public RadixHeap(int bucketMinSize) {
         this.bucketMinSize = bucketMinSize;
@@ -59,22 +56,21 @@ public class RadixHeap {
             final int oldKey = extractKey(packedVal);
             int bucketIndex = getBucketIndex(oldKey);
             LongArrayList array = getBucket(bucketIndex);
-            if (array.size() > 1) {
+            int lastIndex = array.size() - 1;
+            if (lastIndex > 0) {
                 // Find the value we're removing from the array and copy the last value
                 // in the array into its place. Update the size of the array.
                 int indexOfRemoved = -1;
-                for (int i = 0; i < array.size() - 1; i++) {
+                for (int i = 0; i < array.size(); i++) {
                     long val = array.get(i);
                     if (val == packedVal) {
                         indexOfRemoved = i;
                         break;
                     }
                 }
-                if (indexOfRemoved >= 0) {
-                    array.set(indexOfRemoved, array.get(array.size() - 1));
-                }
+                array.set(indexOfRemoved, array.get(lastIndex));
             }
-            array.elementsCount--;
+            array.remove(lastIndex);
             size--;
             return insert(newKey, extractData(packedVal));
         }
@@ -102,11 +98,11 @@ public class RadixHeap {
 
     private void handleSmallestBucket(int indexInBucket) {
         LongArrayList arrayList = getBucket(0);
-        int size = arrayList.size();
-        if (size> 1 && indexInBucket != size - 1) {
-            arrayList.set(indexInBucket, arrayList.get(size - 1));
+        int lastIndex = arrayList.size() - 1;
+        if (lastIndex > 0) {
+            arrayList.set(indexInBucket, arrayList.get(lastIndex));
         }
-        arrayList.elementsCount--;
+        arrayList.remove(lastIndex);
     }
 
     private int extractSmallest() {
