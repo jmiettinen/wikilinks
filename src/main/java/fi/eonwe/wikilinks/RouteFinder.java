@@ -23,7 +23,15 @@ public class RouteFinder {
         this.mapper = mapper;
         this.startIndex = startIndex;
         this.endIndex = endIndex;
-        this.heap = new RadixHeap(1 << 17);
+        this.heap = new RadixHeap(bucketIndex -> {
+            if (bucketIndex < 3) {
+                return 1 << 18;
+            } else if (bucketIndex < 8) {
+                return 1 << 15;
+            } else {
+                return 1 << 10;
+            }
+        });
         this.nodes = new long[mapper.getSize()];
         this.previous = new int[mapper.getSize()];
         Arrays.fill(nodes, -1);

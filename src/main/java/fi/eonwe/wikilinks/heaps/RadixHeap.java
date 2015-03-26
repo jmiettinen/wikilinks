@@ -4,6 +4,7 @@ import com.carrotsearch.hppc.LongArrayList;
 import com.carrotsearch.hppc.cursors.LongCursor;
 import com.carrotsearch.hppc.procedures.LongProcedure;
 import com.google.common.collect.Maps;
+import fi.eonwe.wikilinks.utils.Functions;
 
 import java.util.Arrays;
 import java.util.Map;
@@ -13,14 +14,19 @@ import java.util.TreeMap;
  */
 public class RadixHeap {
 
-    private final int bucketMinSize;
     private LongArrayList[] buckets = new LongArrayList[33];
     private int lastDeleted = 0;
     private int size = 0;
+    private final Functions.IntInt bucketSizes;
 
-    public RadixHeap(int bucketMinSize) {
-        this.bucketMinSize = bucketMinSize;
-        buckets[0] = new LongArrayList(bucketMinSize);
+    public RadixHeap(Functions.IntInt bucketSizes) {
+        this.bucketSizes = bucketSizes;
+        buckets[0] = new LongArrayList(bucketSizes.apply(0));
+    }
+
+    public RadixHeap(int bucketSize) {
+        this(i -> bucketSize);
+        if (bucketSize <= 0) throw new IllegalArgumentException("Bucket default size must be strictly positive (was " + bucketSize + ")");
     }
 
     public RadixHeap() {
@@ -30,7 +36,7 @@ public class RadixHeap {
     private LongArrayList getBucket(int i) {
         LongArrayList list = buckets[i];
         if (list == null) {
-            list = new LongArrayList(bucketMinSize);
+            list = new LongArrayList(bucketSizes.apply(i));
             buckets[i] = list;
         }
         return list;
