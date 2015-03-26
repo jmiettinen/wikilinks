@@ -1,4 +1,4 @@
-package fi.eonwe.wikilinks;
+package fi.eonwe.wikilinks.utils;
 
 /**
  */

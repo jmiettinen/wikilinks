@@ -5,7 +5,7 @@ import fi.eonwe.wikilinks.leanpages.BufferWikiPage;
 import java.util.List;
 import java.util.Random;
 
-import static fi.eonwe.wikilinks.Helpers.quote;
+import static fi.eonwe.wikilinks.utils.Helpers.quote;
 
 /**
  */

@@ -2,9 +2,9 @@ package fi.eonwe.wikilinks;
 
 import com.google.common.collect.Lists;
 import com.google.common.primitives.Ints;
-import fi.eonwe.wikilinks.fibonacciheap.FibonacciHeap;
-import fi.eonwe.wikilinks.fibonacciheap.FibonacciHeapNode;
+import fi.eonwe.wikilinks.heaps.RadixHeap;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -12,8 +12,9 @@ import java.util.List;
  */
 public class RouteFinder {
 
-    private final FibonacciHeap<RouteData> heap;
-    private FibonacciHeapNode[] nodes;
+    private final RadixHeap heap;
+    private long[] nodes;
+    private int[] previous;
     private final int startIndex;
     private final int endIndex;
     private final WikiRoutes.PageMapper mapper;
@@ -22,8 +23,11 @@ public class RouteFinder {
         this.mapper = mapper;
         this.startIndex = startIndex;
         this.endIndex = endIndex;
-        this.heap = new FibonacciHeap<>();
-        this.nodes = new FibonacciHeapNode[mapper.getSize()];
+        this.heap = new RadixHeap(1 << 17);
+        this.nodes = new long[mapper.getSize()];
+        this.previous = new int[mapper.getSize()];
+        Arrays.fill(nodes, -1);
+        Arrays.fill(previous, -1);
         setup(startIndex);
     }
 
@@ -33,56 +37,41 @@ public class RouteFinder {
         return route;
     }
 
-    private void setup(int startId) {
-        FibonacciHeapNode<RouteData> node = getNode(startId);
-        heap.insert(node, 0.0);
-    }
-
-    private static class RouteData {
-        public RouteData prev;
-        public final int linkIndex;
-
-        private RouteData(int linkIndex) {
-            this.linkIndex = linkIndex;
-        }
-    }
-
-    private FibonacciHeapNode<RouteData> getNode(int linkIndex) {
-        @SuppressWarnings("unchecked")
-        FibonacciHeapNode<RouteData> node = nodes[linkIndex];
-        if (node == null) {
-            node = new FibonacciHeapNode<>(new RouteData(linkIndex));
-            nodes[linkIndex] = node;
-            heap.insert(node, Double.POSITIVE_INFINITY);
-        }
-        return node;
+    private void setup(int startIndex) {
+        nodes[startIndex] = heap.insert(0, startIndex);
     }
 
     private int[] find() {
         while (!heap.isEmpty()) {
-            FibonacciHeapNode<RouteData> min = heap.removeMin();
-            RouteData data = min.getData();
-            final double newDistance = min.getKey() + 1.0;
-            int pageIndex = data.linkIndex;
-            if (pageIndex == endIndex) return recordRoute(data);
-            mapper.getForIndex(pageIndex).forEachLinkIndex(linkIndex -> {
-                FibonacciHeapNode<RouteData> node = getNode(linkIndex);
-                if (newDistance < node.getKey()) {
-                    heap.decreaseKey(node, newDistance);
-                    node.getData().prev = data;
+            long minVal = heap.extractMin();
+            int pageIndex = RadixHeap.extractData(minVal);
+            int key = RadixHeap.extractKey(minVal);
+            final int newDistance = key + 1;
+            if (pageIndex == endIndex) return recordRoute(endIndex);
+            for (int linkIndex : mapper.getForIndex(pageIndex).getTargetIndices()) {
+                long existingVal = nodes[linkIndex];
+                if (existingVal != -1) {
+                    int oldKey = RadixHeap.extractKey(existingVal);
+                    if (newDistance < oldKey) {
+                        nodes[linkIndex] = heap.decreaseKey(newDistance, existingVal);
+                        previous[linkIndex] = pageIndex;
+                    }
+                } else {
+                    nodes[linkIndex] = heap.insert(newDistance, linkIndex);
+                    previous[linkIndex] = pageIndex;
                 }
-            });
+            }
         }
         return new int[0];
     }
 
-    private int[] recordRoute(RouteData endPoint) {
+    private int[] recordRoute(int endIndex) {
         List<Integer> list = Lists.newArrayList();
-        RouteData cur = endPoint;
-        while (cur != null) {
-            list.add(cur.linkIndex);
-            cur = cur.prev;
-        }
+        int cur = endIndex;
+        do {
+            list.add(cur);
+            cur = previous[cur];
+        } while (cur != -1);
         Collections.reverse(list);
         return Ints.toArray(list);
     }

@@ -1,76 +1,39 @@
 package fi.eonwe.wikilinks.leanpages;
 
+import fi.eonwe.wikilinks.utils.Functions;
+
 import java.util.Arrays;
 import java.util.function.IntConsumer;
 import java.util.function.IntFunction;
+import java.util.function.LongToIntFunction;
 
 /**
  */
-public abstract class OrderedPage {
+public class OrderedPage {
 
     private final BufferWikiPage page;
+    private final int[] targetIndices;
 
-    protected OrderedPage(BufferWikiPage page) {
+    protected OrderedPage(BufferWikiPage page, int[] targetIndices) {
         this.page = page;
+        this.targetIndices = targetIndices;
     }
 
     public int getId() { return page.getId(); }
     public BufferWikiPage getPage() { return page; }
     public boolean isRedirect() { return false; }
-    public abstract void forEachLinkIndex(IntConsumer c);
-
-    private static class RedirectPage extends OrderedPage {
-
-        private final int targetId;
-
-        protected RedirectPage(BufferWikiPage page, int targetId) {
-            super(page);
-            this.targetId = targetId;
-        }
-
-        @Override
-        public boolean isRedirect() {
-            return true;
-        }
-
-        @Override
-        public void forEachLinkIndex(IntConsumer c) {
-            c.accept(targetId);
-        }
+    public void forEachLinkIndex(IntConsumer c) {
+        for (int i : targetIndices) c.accept(i);
     }
+    public int[] getTargetIndices() { return targetIndices; }
 
-    private static class NormalPage extends OrderedPage {
-
-        private final int[] targetIndices;
-
-        protected NormalPage(BufferWikiPage page, int[] targetIndices) {
-            super(page);
-            this.targetIndices = targetIndices;
-        }
-
-        @Override
-        public void forEachLinkIndex(IntConsumer c) {
-            for (int i : targetIndices) c.accept(i);
-        }
-    }
-
-    public static OrderedPage convert(BufferWikiPage page, IntFunction<Integer> mapping) {
+    public static OrderedPage convert(BufferWikiPage page, Functions.IntInt mapping) {
         int linkCount = page.getLinkCount();
-        if (page.isRedirect()) {
-            if (linkCount == 1) {
-                int[] targetId = {0};
-                page.forEachLink(i -> targetId[0] = i);
-                return new RedirectPage(page, mapping.apply(targetId[0]));
-            } else {
-                throw new AssertionError("Link count is " + page.getLinkCount() + " when it should be 1");
-            }
-        } else {
-            int[] arr = new int[linkCount];
-            int[] index = {0};
-            page.forEachLink(i -> arr[index[0]++] = mapping.apply(i));
-            Arrays.sort(arr);
-            return new NormalPage(page, arr);
-        }
+        int[] arr = new int[linkCount];
+        int[] index = {0};
+        page.forEachLink(i -> arr[index[0]++] = mapping.apply(i));
+        Arrays.sort(arr);
+        return new OrderedPage(page, arr);
     }
 
 }

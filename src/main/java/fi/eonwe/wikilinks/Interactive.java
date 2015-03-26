@@ -1,11 +1,13 @@
 package fi.eonwe.wikilinks;
 
+import fi.eonwe.wikilinks.utils.Helpers;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 
-import static fi.eonwe.wikilinks.Helpers.quote;
+import static fi.eonwe.wikilinks.utils.Helpers.quote;
 
 /**
  */

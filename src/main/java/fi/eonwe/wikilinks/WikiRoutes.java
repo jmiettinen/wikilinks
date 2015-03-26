@@ -4,6 +4,7 @@ import com.google.common.base.Joiner;
 import com.google.common.collect.Lists;
 import fi.eonwe.wikilinks.leanpages.BufferWikiPage;
 import fi.eonwe.wikilinks.leanpages.OrderedPage;
+import fi.eonwe.wikilinks.utils.Functions;
 import net.openhft.koloboke.collect.hash.HashConfig;
 import net.openhft.koloboke.collect.map.hash.HashIntIntMap;
 import net.openhft.koloboke.collect.map.hash.HashIntIntMaps;
@@ -12,18 +13,16 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.function.IntFunction;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import static fi.eonwe.wikilinks.Helpers.quote;
+import static fi.eonwe.wikilinks.utils.Helpers.quote;
 
 /**
  */
 public class WikiRoutes {
 
     private final List<BufferWikiPage> pages;
-//    private final HashIntIntMap idIndexMap;
     private final OrderedPage[] leanPages;
 
     private static final Logger logger = Logger.getLogger(WikiRoutes.class.getCanonicalName());
@@ -33,7 +32,6 @@ public class WikiRoutes {
 
     public WikiRoutes(List<BufferWikiPage> pages) {
         this.pages = constructSortedNames(pages);
-//        this.idIndexMap = constructIdIndexMap(pages);
         this.leanPages = constructLeanArray(pages);
     }
 
@@ -87,7 +85,7 @@ public class WikiRoutes {
         long startTime = System.currentTimeMillis();
         OrderedPage[] leanPages = new OrderedPage[pages.size()];
         HashIntIntMap map = constructIdIndexMap(pages);
-        IntFunction<Integer> mapper = value -> map.getOrDefault(shift(value), -1);
+        Functions.IntInt mapper = value -> map.getOrDefault(shift(value), -1);
         for (BufferWikiPage page : pages) {
             int tableIndex = mapper.apply(page.getId());
             leanPages[tableIndex] = OrderedPage.convert(page, mapper);
