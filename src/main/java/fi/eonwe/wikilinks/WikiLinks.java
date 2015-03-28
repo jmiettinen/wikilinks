@@ -191,7 +191,7 @@ public class WikiLinks {
                 handleError(e);
             }
         } else if (mode == OperationMode.BENCHMARK) {
-            Benchmarking.runBenchmarks(pages, 50);
+            Benchmarking.runBenchmarksAndTest(pages);
         }
     }
 
