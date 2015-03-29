@@ -37,6 +37,7 @@ public class WikiLinks {
     private static final String DISPLAY_HELP = "h";
     private static final String INTERACTIVE_MODE = "i";
     private static final String BENCHMARK_MODE = "b";
+    private static final String ENGLISH_WIKI_TEST = "t";
 
     static {
         opts.addOption(XML_INPUT, true, "Input WikiMedia XML file");
@@ -47,11 +48,12 @@ public class WikiLinks {
         OptionGroup group = new OptionGroup();
         group.addOption(new Option(INTERACTIVE_MODE, "Use interactive mode"));
         group.addOption(new Option(BENCHMARK_MODE, "Run benchmarks"));
+        group.addOption(new Option(ENGLISH_WIKI_TEST, "Run benchmarks and test results against known result in english Wikipedia"));
         opts.addOptionGroup(group);
     }
 
     private static enum Source { XML, SERIALIZED, STDIN }
-    private static enum OperationMode { NONE, INTERACTIVE, BENCHMARK }
+    private static enum OperationMode { NONE, INTERACTIVE, BENCHMARK, WIKI_TEST }
 
     public static CommandLine parseOptions(String[] args) {
         CommandLineParser parser = new GnuParser();
@@ -102,6 +104,7 @@ public class WikiLinks {
         OperationMode mode = OperationMode.NONE;
         if (commandLine.hasOption(INTERACTIVE_MODE)) mode = OperationMode.INTERACTIVE;
         if (commandLine.hasOption(BENCHMARK_MODE)) mode = OperationMode.BENCHMARK;
+        if (commandLine.hasOption(ENGLISH_WIKI_TEST)) mode = OperationMode.WIKI_TEST;
         if (mode == OperationMode.INTERACTIVE && source == Source.STDIN) {
             System.err.println("Cannot have interactive mode when reading from STDIN");
             System.exit(1);
@@ -191,6 +194,8 @@ public class WikiLinks {
                 handleError(e);
             }
         } else if (mode == OperationMode.BENCHMARK) {
+            Benchmarking.runBenchmarks(pages, 50);
+        } else if (mode == OperationMode.WIKI_TEST) {
             Benchmarking.runBenchmarksAndTest(pages);
         }
     }
