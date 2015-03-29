@@ -45,13 +45,13 @@ public class Benchmarking {
             String p1 = (String) route[0];
             String p2 = (String) route[1];
             try {
-                System.out.printf("Finding route %s -> %s%n", quote(p1), quote(p2));
+                System.out.printf("Finding route %s -> %s.", quote(p1), quote(p2));
                 WikiRoutes.Result result = routes.findRoute(p1, p2);
                 long totalTime = System.currentTimeMillis() - startTime;
                 int foundSize = result.getRoute().size();
                 int expectedSize = ((Number)route[2]).intValue();
                 String statusString = foundSize == expectedSize ? "OK" : "FAIL";
-                System.out.printf("Found route length: %d, expected length: %d (%d ms) [%s]%n", foundSize, expectedSize, totalTime, statusString);
+                System.out.printf(" Found route length %d (%d expected) (%d ms) [%s]%n", foundSize, expectedSize, totalTime, statusString);
                 runtimes[i] = totalTime;
             } catch (WikiRoutes.BadRouteException e) {
                 // Not going to happen.
