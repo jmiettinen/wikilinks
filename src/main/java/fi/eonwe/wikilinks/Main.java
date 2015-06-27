@@ -28,7 +28,7 @@ import java.util.List;
 /**
  * Hello world!
  */
-public class WikiLinks {
+public class Main {
 
     private static final Options opts = new Options();
     private static final String XML_INPUT = "x";
