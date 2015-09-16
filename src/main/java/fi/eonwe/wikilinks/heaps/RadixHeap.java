@@ -24,12 +24,12 @@ public class RadixHeap {
         buckets[0] = new LongArrayList(bucketSizes.apply(0));
     }
 
-    public RadixHeap(int bucketSize) {
+    RadixHeap(int bucketSize) {
         this(i -> bucketSize);
         if (bucketSize <= 0) throw new IllegalArgumentException("Bucket default size must be strictly positive (was " + bucketSize + ")");
     }
 
-    public RadixHeap() {
+    RadixHeap() {
         this(128);
     }
 

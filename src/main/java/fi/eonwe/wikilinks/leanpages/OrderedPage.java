@@ -32,7 +32,6 @@ public class OrderedPage {
         int[] arr = new int[linkCount];
         int[] index = {0};
         page.forEachLink(i -> arr[index[0]++] = mapping.apply(i));
-        Arrays.sort(arr);
         return new OrderedPage(page, arr);
     }
 

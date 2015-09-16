@@ -7,6 +7,7 @@ import com.google.common.primitives.UnsignedBytes;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.Arrays;
 import java.util.function.IntConsumer;
 
 /**
@@ -68,6 +69,7 @@ public class BufferWikiPage implements LeanWikiPage<BufferWikiPage> {
         for (int i = 0; i < arr.length; i++) {
             arr[i] = Ints.checkedCast(links[i]);
         }
+        if (!isSorted(arr)) Arrays.sort(arr);
         return new BufferWikiPage(bufferFrom(Ints.checkedCast(id), arr, title, isRedirect), 0);
     }
 
@@ -194,4 +196,17 @@ public class BufferWikiPage implements LeanWikiPage<BufferWikiPage> {
     public String toString() {
         return String.format("\"%s\" (#%d), %d links", getTitle(), getId(), getLinkCount());
     }
+
+    private static boolean isSorted(int[] array) {
+        if (array.length >= 2) {
+            int earlier = array[0];
+            for (int i = 1; i < array.length; i++) {
+                int current = array[i];
+                if (current < earlier) return false;
+                earlier = current;
+            }
+        }
+        return true;
+    }
+
 }
