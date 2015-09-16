@@ -163,7 +163,7 @@ public class Main {
         }
         long loadStart = System.currentTimeMillis();
         final String inputFileName = source == Source.STDIN ? "<stdin>" : inputFile.toString();
-        System.out.printf("Staring to read %s%n", inputFileName);
+        System.out.printf("Starting to read %s%n", inputFileName);
         List<BufferWikiPage> pages;
         if (source == Source.XML) {
             pages = readXml(input, inputFile.getName().endsWith(".bz2"));
@@ -201,8 +201,7 @@ public class Main {
     }
 
     private static void doInteractive(List<BufferWikiPage> pages, BufferedReader console) throws IOException {
-        System.out.println("Staring interactive mode");
-//        printStatistics(pages);
+        System.out.println("Starting interactive mode");
 
         long initStart = System.currentTimeMillis();
         WikiRoutes routes = new WikiRoutes(pages);
