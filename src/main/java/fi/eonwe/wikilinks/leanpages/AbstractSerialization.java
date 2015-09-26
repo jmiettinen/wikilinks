@@ -5,11 +5,9 @@ import com.google.common.primitives.Ints;
 
 import java.io.FileInputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.WritableByteChannel;
 import java.util.Collection;
@@ -74,7 +72,7 @@ public abstract class AbstractSerialization<T extends LeanWikiPage<T>> {
         return readFromSerialized(fromByteBuffer(buffer));
     }
 
-    private static interface BufferProvider {
+    private interface BufferProvider {
         ByteBuffer map(long startOffset, long size) throws IOException;
         long size() throws IOException;
     }

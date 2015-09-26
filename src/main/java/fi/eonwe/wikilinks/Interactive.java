@@ -79,6 +79,8 @@ public class Interactive {
                     result = String.format("Neither start point %s or end point %s do exist", e.getStartName(), e.getEndName());
                 }
             }
+        } catch (RuntimeException e) {
+            result = "<ERROR>: " + e.getMessage();
         }
         System.out.printf("%s%n", result);
     }

@@ -18,12 +18,6 @@
 
     <dependencies>
         <dependency>
-            <groupId>junit</groupId>
-            <artifactId>junit</artifactId>
-            <version>4.12</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
             <groupId>org.apache.commons</groupId>
             <artifactId>commons-compress</artifactId>
             <version>1.9</version>
@@ -55,14 +49,36 @@
             <scope>runtime</scope>
         </dependency>
         <dependency>
-            <groupId>com.carrotsearch</groupId>
-            <artifactId>hppc</artifactId>
-            <version>0.6.1</version>
+            <groupId>com.github.vsonnier</groupId>
+            <artifactId>hppcrt</artifactId>
+            <version>0.7.1</version>
+        </dependency>
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <version>4.12</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.jgrapht</groupId>
+            <artifactId>jgrapht-core</artifactId>
+            <version>0.9.1</version>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 
     <build>
         <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>2.18.1</version>
+                <configuration>
+                    <excludes>
+                        <exclude>**/RouteFinderTest.java</exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
@@ -101,50 +117,6 @@
                 <configuration>
                     <finalName>${uber-jar-name}</finalName>
                 </configuration>
-            </plugin>
-            <!--<plugin>-->
-                <!--<groupId>com.github.wvengen</groupId>-->
-                <!--<artifactId>proguard-maven-plugin</artifactId>-->
-                <!--<version>2.0.8</version>-->
-                <!--<executions>-->
-                    <!--<execution>-->
-                        <!--<phase>package</phase>-->
-                        <!--<goals><goal>proguard</goal></goals>-->
-                    <!--</execution>-->
-                <!--</executions>-->
-                <!--<configuration>-->
-                    <!--<injar>${uber-jar-name}.jar</injar>-->
-                    <!--<outjar>${uber-jar-name}-small.jar</outjar>-->
-                    <!--<outputDirectory>${project.build.directory}</outputDirectory>-->
-                    <!--<proguardInclude>${basedir}/proguard.conf</proguardInclude>-->
-                    <!--<libs>-->
-                        <!--<lib>${java.home}/lib/rt.jar</lib>-->
-                        <!--<lib>${java.home}/lib/jsse.jar</lib>-->
-                    <!--</libs>-->
-                <!--</configuration>-->
-            <!--</plugin>-->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-antrun-plugin</artifactId>
-                <version>1.8</version>
-                <executions>
-                    <execution>
-                        <id>create_binary</id>
-                        <phase>package</phase>
-                        <configuration>
-                            <target>
-                                <concat destfile="${shell-jar-path}" force="yes" binary="true">
-                                    <fileset file="${basedir}/src/wikilinks.sh" />
-                                    <fileset file="${project.build.directory}/${uber-jar-name}.jar" />
-                                </concat>
-                                <chmod file="${shell-jar-path}" perm="a+x" />
-                            </target>
-                        </configuration>
-                        <goals>
-                            <goal>run</goal>
-                        </goals>
-                    </execution>
-                </executions>
             </plugin>
         </plugins>
     </build>
