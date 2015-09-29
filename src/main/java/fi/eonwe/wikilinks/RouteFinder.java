@@ -40,7 +40,7 @@ public class RouteFinder {
             if (pageIndex == endIndex) {
                 return recordRoute(endIndex, previous);
             }
-            mapper.getForIndex(pageIndex).forEachLinkIndex(linkIndex -> {
+            mapper.forEachLinkIndex(pageIndex, linkIndex -> {
                 if (previous[linkIndex] == -1) {
                     boolean didFit = queue.addLast(linkIndex);
                     assert didFit;
