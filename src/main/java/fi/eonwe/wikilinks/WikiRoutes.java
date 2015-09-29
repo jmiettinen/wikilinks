@@ -2,6 +2,7 @@ package fi.eonwe.wikilinks;
 
 import com.google.common.base.Joiner;
 import com.google.common.collect.Lists;
+import com.google.common.primitives.Ints;
 import fi.eonwe.wikilinks.leanpages.BufferWikiPage;
 import fi.eonwe.wikilinks.leanpages.OrderedPage;
 import fi.eonwe.wikilinks.utils.Functions;
@@ -13,10 +14,13 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.IntConsumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.stream.Stream;
 
 import static fi.eonwe.wikilinks.utils.Helpers.quote;
+import static java.util.stream.Collectors.summingLong;
 
 /**
  */
@@ -24,6 +28,7 @@ public class WikiRoutes {
 
     private final List<BufferWikiPage> pages;
     private final OrderedPage[] leanPages;
+    private final PageMapper mapper;
 
     private static final Logger logger = Logger.getLogger(WikiRoutes.class.getCanonicalName());
     static {
@@ -33,6 +38,7 @@ public class WikiRoutes {
     public WikiRoutes(List<BufferWikiPage> pages) {
         this.pages = constructSortedNames(pages);
         this.leanPages = constructLeanArray(pages);
+        this.mapper = new LeanPageMapper(leanPages);
     }
 
     public Result findRoute(String startPage, String endPage) throws BadRouteException {
@@ -57,7 +63,6 @@ public class WikiRoutes {
 
     private Result findRoute(int startPage, int endPage) {
         long startTime = System.currentTimeMillis();
-        PageMapper mapper = createMapper();
         int[] routeIndices = RouteFinder.find(startPage, endPage, mapper);
         List<BufferWikiPage> path = Arrays.asList(Arrays.stream(routeIndices).mapToObj(i -> leanPages[i].getPage()).toArray(BufferWikiPage[]::new));
         return new Result(path, System.currentTimeMillis() - startTime);
@@ -192,15 +197,15 @@ public class WikiRoutes {
     }
 
     public static interface PageMapper {
-        OrderedPage getForIndex(int id);
+        void forEachLinkIndex(int pageIndex, IntConsumer c);
         int getSize();
     }
 
     private PageMapper createMapper() {
         return new PageMapper() {
             @Override
-            public OrderedPage getForIndex(int index) {
-                return leanPages[index];
+            public void forEachLinkIndex(int pageIndex, IntConsumer c) {
+                leanPages[pageIndex].forEachLinkIndex(c);
             }
 
             @Override
@@ -208,6 +213,43 @@ public class WikiRoutes {
                 return leanPages.length;
             }
         };
+    }
+    
+    private static class LeanPageMapper implements PageMapper {
+        int[] index;
+        int[] links;
+        
+        public LeanPageMapper(OrderedPage[] leanPages) {
+            long startTime = System.currentTimeMillis();
+            long linkCount = Stream.of(leanPages).collect(summingLong(p -> p.getTargetIndices().length));
+
+            links = new int[Ints.checkedCast(linkCount)];
+            index = new int[leanPages.length + 1];
+            
+            int[] pageIndex = {0};
+            int[] linkIndex = {0};
+            Stream.of(leanPages).forEach(p -> {
+                index[pageIndex[0]++] = linkIndex[0];
+                p.forEachLinkIndex(i -> links[linkIndex[0]++] = i);
+            });
+            pageIndex[pageIndex.length - 1] = linkIndex[0];
+            logger.info(() -> String.format("Took %d ms to create page mapper", System.currentTimeMillis() - startTime));
+        }
+
+        @Override
+        public void forEachLinkIndex(int pageIndex, IntConsumer c) {
+            int start = index[pageIndex];
+            int end = index[pageIndex + 1];
+            
+            for (int i = start; i < end; i++) {
+                c.accept(links[i]);
+            }
+        }
+
+        @Override
+        public int getSize() {
+            return index.length;
+        }
     }
 
     public static class Result {

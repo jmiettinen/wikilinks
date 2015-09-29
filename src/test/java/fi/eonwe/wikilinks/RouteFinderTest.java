@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
+import java.util.function.IntConsumer;
 import java.util.stream.Stream;
 
 import com.google.common.collect.Maps;
@@ -102,8 +103,8 @@ public class RouteFinderTest {
     private static WikiRoutes.PageMapper fromMap(Map<Integer, OrderedPage> map) {
         return new WikiRoutes.PageMapper() {
             @Override
-            public OrderedPage getForIndex(int id) {
-                return map.get(id);
+            public void forEachLinkIndex(int pageIndex, IntConsumer c) {
+                map.get(pageIndex).forEachLinkIndex(c);
             }
 
             @Override
