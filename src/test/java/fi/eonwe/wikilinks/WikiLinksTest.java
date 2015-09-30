@@ -163,9 +163,8 @@ public class WikiLinksTest {
         List<BufferWikiPage> readFromXml = WikiProcessor.packPages(convert(createSimpleDenseGraph(4, prefix, true)));
         readFromXml.forEach(p -> {
             Set<Integer> set = Sets.newHashSet();
-            int[] links = p.getLinks();
-            Arrays.stream(links).forEach(set::add);
-            assertThat(links.length, is(equalTo(set.size())));
+            p.forEachLink(set::add);
+            assertThat(p.getLinkCount(), is(equalTo(set.size())));
         });
     }
 

@@ -196,36 +196,22 @@ public class WikiRoutes {
         return -val - 1;
     }
 
-    public static interface PageMapper {
+    public interface PageMapper {
         void forEachLinkIndex(int pageIndex, IntConsumer c);
         int getSize();
     }
 
-    private PageMapper createMapper() {
-        return new PageMapper() {
-            @Override
-            public void forEachLinkIndex(int pageIndex, IntConsumer c) {
-                leanPages[pageIndex].forEachLinkIndex(c);
-            }
-
-            @Override
-            public int getSize() {
-                return leanPages.length;
-            }
-        };
-    }
-    
     private static class LeanPageMapper implements PageMapper {
-        int[] index;
-        int[] links;
-        
+        private final int[] index;
+        private final int[] links;
+
         public LeanPageMapper(OrderedPage[] leanPages) {
             long startTime = System.currentTimeMillis();
             long linkCount = Stream.of(leanPages).collect(summingLong(p -> p.getTargetIndices().length));
 
             links = new int[Ints.checkedCast(linkCount)];
             index = new int[leanPages.length + 1];
-            
+
             int[] pageIndex = {0};
             int[] linkIndex = {0};
             Stream.of(leanPages).forEach(p -> {
@@ -240,7 +226,7 @@ public class WikiRoutes {
         public void forEachLinkIndex(int pageIndex, IntConsumer c) {
             int start = index[pageIndex];
             int end = index[pageIndex + 1];
-            
+
             for (int i = start; i < end; i++) {
                 c.accept(links[i]);
             }

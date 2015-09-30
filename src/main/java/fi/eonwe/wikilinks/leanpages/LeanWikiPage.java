@@ -21,13 +21,6 @@ public interface LeanWikiPage<T extends LeanWikiPage<T>> extends Comparable<T> {
         return compareTitle(other);
     }
 
-    default int[] getLinks() {
-        int[] links = new int[getLinkCount()];
-        final int[] i = {0};
-        forEachLink(id -> links[i[0]++] = id);
-        return links;
-    }
-
     T createTempFor(String title);
     ByteBuffer getBuffer();
     int size();
