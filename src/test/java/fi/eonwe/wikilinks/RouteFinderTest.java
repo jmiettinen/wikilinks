@@ -101,17 +101,7 @@ public class RouteFinderTest {
     }
 
     private static WikiRoutes.PageMapper fromMap(Map<Integer, OrderedPage> map) {
-        return new WikiRoutes.PageMapper() {
-            @Override
-            public void forEachLinkIndex(int pageIndex, IntConsumer c) {
-                map.get(pageIndex).forEachLinkIndex(c);
-            }
-
-            @Override
-            public int getSize() {
-                return map.size();
-            }
-        };
+        return (pageIndex, c) -> map.get(pageIndex).forEachLinkIndex(c);
     }
 
     private static Map<Integer, OrderedPage> createFromGraph(SimpleDirectedGraph<Integer, IntEdge> graph) {

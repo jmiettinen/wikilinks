@@ -18,6 +18,7 @@ import com.google.common.base.Joiner;
 import com.google.common.collect.Lists;
 import com.google.common.primitives.Ints;
 import fi.eonwe.wikilinks.leanpages.BufferWikiPage;
+import fi.eonwe.wikilinks.utils.Functions;
 import net.openhft.koloboke.collect.hash.HashConfig;
 import net.openhft.koloboke.collect.map.IntIntMap;
 import net.openhft.koloboke.collect.map.hash.HashIntIntMap;
@@ -201,8 +202,12 @@ public class WikiRoutes {
             int val = index.getOrDefault(pageId, -1);
             // Not all pages are linked to.
             if (val < 0) return;
-            final int linkCountIndex = val + 1;
-            final int linkCount = unShift(links[linkCountIndex]);
+            visitLinks(val, c);
+        }
+
+        private void visitLinks(int indexInLinks, IntConsumer c) {
+            final int linkCountIndex = indexInLinks + 1;
+            final int linkCount = links[linkCountIndex];
             final int start = linkCountIndex + 1;
             final int end = start + linkCount;
 
@@ -214,21 +219,22 @@ public class WikiRoutes {
         private LeanPageMapper reverse() {
             long startTime = System.currentTimeMillis();
             IntIntMap reverseCounts = HashIntIntMaps.newMutableMap(index.size());
-            int reverseLinkerCount = 0;
-            for (int targetIdOrCount : links) {
-                if (targetIdOrCount >= 0) {
-                    reverseCounts.addValue(targetIdOrCount, 1, 0);
-                    reverseLinkerCount++;
+            final int[] reverseLinkerCount = { 0 };
+            visitLinkArray(links, (linkerId, linkCount, firstLinkIndex, firstPastLastLinkIndex) -> {
+                for (int i = firstLinkIndex; i < firstPastLastLinkIndex; i++) {
+                    final int targetId = links[i];
+                    reverseCounts.addValue(targetId, 1, 0);
+                    reverseLinkerCount[0]++;
                 }
-            }
+            });
             HashIntIntMap reversedIndex = HashIntIntMaps.newMutableMap(reverseCounts.size());
             final int[] linkIndex = { 0 };
-            int[] reversedLinks = new int[Ints.checkedCast(reverseLinkerCount + ADDITIONAL_INFO * reverseCounts.size())];
+            int[] reversedLinks = new int[Ints.checkedCast(reverseLinkerCount[0] + ADDITIONAL_INFO * reverseCounts.size())];
             reverseCounts.forEach((IntIntConsumer) (targetId, count) -> {
                 final int startLinkIndex = linkIndex[0];
                 reversedIndex.put(targetId, startLinkIndex);
-                reversedLinks[startLinkIndex] = shift(targetId);
-                reversedLinks[startLinkIndex + 1] = shift(0);
+                reversedLinks[startLinkIndex] = targetId;
+                reversedLinks[startLinkIndex + 1] = 0;
                 linkIndex[0] += count + ADDITIONAL_INFO;
             });
             fillLinks(reversedLinks, reversedIndex);
@@ -237,29 +243,32 @@ public class WikiRoutes {
         }
 
         private void fillLinks(int[] reversedLinks, HashIntIntMap reversedIndex) {
-            int linkerId = -1;
-            int linkCount = -1;
-            int readLinkCount = 0;
-            for (int val : links) {
-                if (linkerId < 0) {
-                    linkerId = unShift(val);
-                } else if (linkCount < 0) {
-                    linkCount = unShift(val);
-                } else {
-                    final int targetId = val;
+            visitLinkArray(links, (linkerId, linkCount, firstLinkIndex, firstPastLastLinkIndex) -> {
+                for (int i = firstLinkIndex; i < firstPastLastLinkIndex; i++) {
+                    final int targetId  = links[i];
                     final int startLinkIndex = reversedIndex.getOrDefault(targetId, Integer.MIN_VALUE);
                     final int reverseLinkIndex = startLinkIndex + 1;
-                    final int reverseLinksWrittenRaw = reversedLinks[reverseLinkIndex];
-                    final int reverseLinksWritten = unShift(reverseLinksWrittenRaw);
+                    final int reverseLinksWritten = reversedLinks[reverseLinkIndex];
                     final int newLinkerIndex = reverseLinkIndex + reverseLinksWritten + 1;
                     reversedLinks[newLinkerIndex] = linkerId;
-                    reversedLinks[reverseLinkIndex] = shift(reverseLinksWritten + 1);
-                    readLinkCount++;
+                    reversedLinks[reverseLinkIndex] = reverseLinksWritten + 1;
                 }
-                if (readLinkCount == linkCount) {
-                    readLinkCount = 0;
+            });
+        }
+
+        private static void visitLinkArray(int[] linkArray, Functions.IntIntIntIntProcedure procedure) {
+            int linkerId = -1;
+            for (int i = 0; i < linkArray.length;) {
+                if (linkerId < 0) {
+                    linkerId = linkArray[i];
+                    i++;
+                } else {
+                    final int linkCount = linkArray[i];
+                    final int firstLinkIndex = i + 1;
+                    final int firstPastLastLinkIndex = firstLinkIndex + linkCount;
+                    procedure.apply(linkerId, linkCount, firstLinkIndex, firstPastLastLinkIndex);
+                    i = firstPastLastLinkIndex;
                     linkerId = -1;
-                    linkCount = -1;
                 }
             }
         }
@@ -276,8 +285,8 @@ public class WikiRoutes {
                                                         final int sourceId = page.getId();
                                                         final int linkCount = page.getLinkCount();
                                                         final int startLinkIndex = linkIndex[0];
-                                                        links[linkIndex[0]++] = shift(sourceId);
-                                                        links[linkIndex[0]++] = shift(linkCount);
+                                                        links[linkIndex[0]++] = sourceId;
+                                                        links[linkIndex[0]++] = linkCount;
                                                         page.forEachLink(linkTarget -> {
                                                             links[linkIndex[0]++] = linkTarget;
                                                         });
@@ -288,10 +297,6 @@ public class WikiRoutes {
             logger.info(() -> String.format("Took %d ms to create page mapper", System.currentTimeMillis() - startTime));
             return new LeanPageMapper(map, links);
         }
-
-        private static int shift(int val) { return -val - 1; }
-
-        private static int unShift(int val) { return shift(val); }
     }
 
     private static Comparator<BufferWikiPage> byId() {
