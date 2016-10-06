@@ -1,5 +1,8 @@
 package fi.eonwe.wikilinks.leanpages;
 
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.LoadingCache;
 import com.google.common.collect.Lists;
 import com.google.common.primitives.Ints;
 
@@ -11,7 +14,10 @@ import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
 import java.nio.channels.WritableByteChannel;
 import java.util.Collection;
+import java.util.Iterator;
 import java.util.List;
+import java.util.NoSuchElementException;
+import java.util.WeakHashMap;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 
@@ -104,6 +110,97 @@ public abstract class AbstractSerialization<T extends LeanWikiPage<T>> {
             }
         } while (readCount[0] < count);
         return pages;
+    }
+
+    private class Flyweight implements Iterable<T> {
+
+        private final BufferProvider bufferProvider;
+        private IOException exception;
+        private long fileSize;
+
+        public Flyweight(BufferProvider bufferProvider) {
+            this.bufferProvider = bufferProvider;
+
+            doTry(() -> {
+                try {
+                    this.fileSize = bufferProvider.size();
+                } catch (IOException e) {
+                    throw new UncheckedIOException(e);
+                }
+            });
+        }
+
+        private void doTry(Runnable r) {
+            try {
+                if (exception == null) r.run();
+            } catch (UncheckedIOException e) {
+                this.exception = e.getCause();
+            }
+        }
+
+        @Override
+        public Iterator<T> iterator() {
+            return new Iterator<T>() {
+                boolean isBroken = fileSize == 0;
+                long startOffset = 0;
+                long readSize = Math.min(fileSize - startOffset,  headerSize());
+                ByteBuffer buffer;
+                int[] lastOffset = { 0 };
+                int[] readCount = { 0 };
+                int count;
+                T next = null;
+                {
+                    try {
+                        buffer = bufferProvider.map(startOffset, readSize);
+                        long[] headerData = new long[2];
+                        readHeader(buffer, headerData);
+                        setByteOrder(buffer);
+                        int versionNumber = (int) headerData[0];
+                        if (versionNumber != getMagicCookie()) {
+                            isBroken = true;
+                        }
+                        count = Ints.checkedCast(headerData[1]);
+                        startOffset += readSize;
+                    } catch (IOException e) {
+                        isBroken = true;
+                    }
+                }
+
+                @Override
+                public boolean hasNext() {
+                    if (next == null) {
+                        fetchNext();
+                    }
+                    return next != null;
+                }
+
+                private void fetchNext() {
+                    if (isBroken) {
+                        next = null;
+                    }
+                }
+
+                @Override
+                public T next() {
+                    if (next == null) {
+                        fetchNext();
+                    }
+                    if (next == null) {
+                        throw new NoSuchElementException();
+                    } else {
+                        T returned = next;
+                        next = null;
+                        return returned;
+                    }
+                }
+            };
+        }
+    }
+
+    private interface ExceptionRunnable<T extends Exception> {
+
+        void run() throws T;
+
     }
 
     public void serialize(Collection<T> graph, WritableByteChannel channel) throws IOException {

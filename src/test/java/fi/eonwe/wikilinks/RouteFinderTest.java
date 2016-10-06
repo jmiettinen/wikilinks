@@ -64,8 +64,8 @@ public class RouteFinderTest {
         final int vertexCount = 1000;
         final int edgeCount = vertexCount * Math.min(vertexCount / 2, 100);
         RandomGraphGenerator<Integer, IntEdge> generator = new RandomGraphGenerator<>(vertexCount, edgeCount);
-        final int repeats = 100;
-        final int innerRepeats = 1000;
+        final int repeats = 10;
+        final int innerRepeats = 10;
         for (int i = 0; i < repeats; i++) {
             SimpleDirectedGraph<Integer, IntEdge> graph = new SimpleDirectedGraph<>(new EF());
             Map<String, Integer> resultMap = Maps.newHashMap();
@@ -85,9 +85,9 @@ public class RouteFinderTest {
 
                 WikiRoutes.PageMapper mapper = fromMap(orderedPageMap);
                 long myStart = System.currentTimeMillis();
-                int[] myRoute = RouteFinder.find(startVertex, endVertex, mapper);
+                int[] myRoute = RouteFinder.find(startVertex, endVertex, mapper, null);
                 long myTime = System.currentTimeMillis() - myStart;
-                System.out.printf("%d vertices, %d edges: JGraphT=%d ms, RouteFinder=%d ms%n", vertexCount, (long) edgeCount * vertexCount, jgraphtTime, myTime);
+//                System.out.printf("%d vertices, %d edges: JGraphT=%d ms, RouteFinder=%d ms%n", vertexCount, (long) edgeCount * vertexCount, jgraphtTime, myTime);
                 assertEquals(route.length, myRoute.length);
 //                assertArrayEquals(route, myRoute);
             }

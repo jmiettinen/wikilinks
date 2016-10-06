@@ -25,6 +25,7 @@ public class BufferWikiPage implements LeanWikiPage<BufferWikiPage> {
 
     private final ByteBuffer data;
     private final int offset;
+    private int id = Integer.MIN_VALUE;
 
     private final static long[] EMPTY_ARRAY = new long[0];
 
@@ -103,9 +104,9 @@ public class BufferWikiPage implements LeanWikiPage<BufferWikiPage> {
     @Override
     public void forEachLink(IntConsumer procedure) {
         final int size = getLinkCount();
-        final int linkOffset = relativeOffset(data.getInt(relativeOffset(LINKS_OFFSET)));
-        for (int i = 0; i < size; i++) {
-            procedure.accept(data.getInt(linkOffset + i * Integer.BYTES));
+        int linkOffset = relativeOffset(data.getInt(relativeOffset(LINKS_OFFSET)));
+        for (int i = 0; i < size; i++, linkOffset += Integer.BYTES) {
+            procedure.accept(data.getInt(linkOffset));
         }
     }
 
@@ -120,8 +121,12 @@ public class BufferWikiPage implements LeanWikiPage<BufferWikiPage> {
 
     @Override
     public int getId() {
-        int id = getRawId();
-        return id < 0 ? -id : id;
+        int id = this.id;
+        if (id == Integer.MIN_VALUE) {
+            int rawId = getRawId();
+            id = rawId < 0 ? -rawId : rawId;
+        }
+        return id;
     }
 
     @Override
@@ -153,8 +158,7 @@ public class BufferWikiPage implements LeanWikiPage<BufferWikiPage> {
         return comparison;
     }
 
-    @Override
-    public BufferWikiPage createTempFor(String title) {
+    public static BufferWikiPage createTempFor(String title) {
         return createFrom(0, EMPTY_ARRAY, title, false);
     }
 
@@ -172,8 +176,16 @@ public class BufferWikiPage implements LeanWikiPage<BufferWikiPage> {
             int len1 = size();
             int len2 = size();
             if (len1 != len2) return false;
-            for (int i1 = offset, i2 = other.offset; i1 < offset + len1; i1++, i2++) {
-                if (data.get(i1) != other.data.get(i2)) {
+            int i1 = offset;
+            int i2 = other.offset;
+            final ByteBuffer otherData = other.data;
+            for (; i1 + Long.BYTES < offset + len1; i1 += Long.BYTES, i2 += Long.BYTES) {
+                long v1 = data.getLong(i1);
+                long v2 = otherData.getLong(i2);
+                if (v1 != v2) return false;
+            }
+            for (; i1 < offset + len1; i1++, i2++) {
+                if (data.get(i1) != otherData.get(i2)) {
                     return false;
                 }
             }

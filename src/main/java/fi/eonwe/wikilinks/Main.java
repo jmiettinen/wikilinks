@@ -5,7 +5,7 @@ import fi.eonwe.wikilinks.leanpages.BufferWikiPage;
 import fi.eonwe.wikilinks.leanpages.BufferWikiSerialization;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
-import org.apache.commons.cli.GnuParser;
+import org.apache.commons.cli.DefaultParser;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.OptionGroup;
 import org.apache.commons.cli.Options;
@@ -48,7 +48,7 @@ public class Main {
         OptionGroup group = new OptionGroup();
         group.addOption(new Option(INTERACTIVE_MODE, "Use interactive mode"));
         group.addOption(new Option(BENCHMARK_MODE, "Run benchmarks"));
-        group.addOption(new Option(ENGLISH_WIKI_TEST, "Run benchmarks and test results against known result in english Wikipedia"));
+        group.addOption(new Option(ENGLISH_WIKI_TEST, "Run benchmarks and test results against known result in English Wikipedia"));
         opts.addOptionGroup(group);
     }
 
@@ -56,7 +56,7 @@ public class Main {
     private static enum OperationMode { NONE, INTERACTIVE, BENCHMARK, WIKI_TEST }
 
     public static CommandLine parseOptions(String[] args) {
-        CommandLineParser parser = new GnuParser();
+        CommandLineParser parser = new DefaultParser();
         try {
             CommandLine commandLine = parser.parse(opts, args);
             return commandLine;
@@ -77,6 +77,7 @@ public class Main {
 
     public static void main(String[] args) {
         CommandLine commandLine = parseOptions(args);
+        assert commandLine != null;
         if (commandLine.hasOption(DISPLAY_HELP) || commandLine.getOptions().length == 0) {
             printHelpAndExit();
         }
@@ -188,8 +189,8 @@ public class Main {
             System.out.printf("Finished in %d ms%n", System.currentTimeMillis() - writeStart);
         }
         if (mode == OperationMode.INTERACTIVE) {
-            try {
-                doInteractive(pages, new BufferedReader(new InputStreamReader(System.in)));
+            try (InputStreamReader ir = new InputStreamReader(System.in); BufferedReader br = new BufferedReader(ir)){
+                doInteractive(pages, br);
             } catch (IOException e) {
                 handleError(e);
             }
@@ -255,5 +256,4 @@ public class Main {
         fos.flush();
         fos.close();
     }
-
 }

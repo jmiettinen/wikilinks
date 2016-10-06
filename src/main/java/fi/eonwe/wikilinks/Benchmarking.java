@@ -11,8 +11,6 @@ import static fi.eonwe.wikilinks.utils.Helpers.quote;
  */
 public class Benchmarking {
 
-    private static final int SAMPLED_PAGES = 1_000;
-
     public static void runBenchmarks(List<BufferWikiPage> pages, int measurements) {
         final Random rng = new Random(0xcafebabe);
         WikiRoutes routes = new WikiRoutes(pages);

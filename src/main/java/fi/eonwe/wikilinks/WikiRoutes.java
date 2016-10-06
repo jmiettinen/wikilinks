@@ -1,118 +1,104 @@
 package fi.eonwe.wikilinks;
 
-import com.google.common.base.Joiner;
-import com.google.common.collect.Lists;
-import com.google.common.primitives.Ints;
-import fi.eonwe.wikilinks.leanpages.BufferWikiPage;
-import fi.eonwe.wikilinks.leanpages.OrderedPage;
-import fi.eonwe.wikilinks.utils.Functions;
-import net.openhft.koloboke.collect.hash.HashConfig;
-import net.openhft.koloboke.collect.map.hash.HashIntIntMap;
-import net.openhft.koloboke.collect.map.hash.HashIntIntMaps;
-
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.IntConsumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import java.util.stream.Stream;
+import java.util.stream.Collectors;
+
+import javax.annotation.Nullable;
+
+import com.google.common.base.Joiner;
+import com.google.common.collect.Lists;
+import com.google.common.primitives.Ints;
+import fi.eonwe.wikilinks.leanpages.BufferWikiPage;
+import net.openhft.koloboke.collect.hash.HashConfig;
+import net.openhft.koloboke.collect.map.IntIntMap;
+import net.openhft.koloboke.collect.map.hash.HashIntIntMap;
+import net.openhft.koloboke.collect.map.hash.HashIntIntMaps;
+import net.openhft.koloboke.collect.set.hash.HashIntSet;
+import net.openhft.koloboke.collect.set.hash.HashIntSets;
+import net.openhft.koloboke.function.IntIntConsumer;
 
 import static fi.eonwe.wikilinks.utils.Helpers.quote;
-import static java.util.stream.Collectors.summingLong;
 
 /**
  */
 public class WikiRoutes {
 
-    private final List<BufferWikiPage> pages;
-    private final OrderedPage[] leanPages;
-    private final PageMapper mapper;
+    private final List<BufferWikiPage> pagesByTitle;
+    private final List<BufferWikiPage> pagesById;
+    private final LeanPageMapper mapper;
+    private final LeanPageMapper reverseMapper;
 
     private static final Logger logger = Logger.getLogger(WikiRoutes.class.getCanonicalName());
     static {
-        logger.setLevel(Level.WARNING);
+        logger.setLevel(Level.INFO);
     }
 
     public WikiRoutes(List<BufferWikiPage> pages) {
-        this.pages = constructSortedNames(pages);
-        this.leanPages = constructLeanArray(pages);
-        this.mapper = new LeanPageMapper(leanPages);
+        this.pagesByTitle = new ArrayList<>(pages);
+        this.pagesById = new ArrayList<>(pages);
+        this.mapper = LeanPageMapper.convert(pages);
+        this.reverseMapper = this.mapper.reverse();
+        sortIfNeeded(this.pagesById, "by id", byId());
+        sortIfNeeded(this.pagesByTitle, "by title", BufferWikiPage::compareTitle);
     }
 
     public Result findRoute(String startPage, String endPage) throws BadRouteException {
-        int startPageObj = getPageIndex(startPage);
-        int endPageObj = getPageIndex(endPage);
-        if (startPageObj == -1 || endPageObj == -1) {
+        BufferWikiPage startPageObj = getPage(startPage);
+        BufferWikiPage endPageObj = getPage(endPage);
+        if (startPageObj == null || endPageObj == null) {
             throw new BadRouteException(startPage == null, endPage == null, startPage, endPage);
         }
         return findRoute(startPageObj, endPageObj);
     }
 
+    @Nullable
     public String getRandomPage() {
         ThreadLocalRandom rng = ThreadLocalRandom.current();
-        if (pages.size() == 1) {
-            return pages.get(0).getTitle();
-        } else if (pages.isEmpty()) {
+        if (pagesByTitle.size() == 1) {
+            return pagesByTitle.get(0).getTitle();
+        } else if (pagesByTitle.isEmpty()) {
             return null;
         }
-        int i = rng.nextInt(pages.size());
-        return pages.get(i).getTitle();
+        int i = rng.nextInt(pagesByTitle.size());
+        return pagesByTitle.get(i).getTitle();
     }
 
-    private Result findRoute(int startPage, int endPage) {
+    private void sortIfNeeded(List<BufferWikiPage> list, String name, Comparator<? super BufferWikiPage> comp) {
         long startTime = System.currentTimeMillis();
-        int[] routeIndices = RouteFinder.find(startPage, endPage, mapper);
-        List<BufferWikiPage> path = Arrays.asList(Arrays.stream(routeIndices).mapToObj(i -> leanPages[i].getPage()).toArray(BufferWikiPage[]::new));
+        if (!isSorted(list, comp)) {
+            logger.info("Starting to sort by " + name);
+            Collections.sort(list, comp);
+            logger.info(String.format("Took %d ms to sort by %s", System.currentTimeMillis() - startTime, name));
+        }
+    }
+
+    private Result findRoute(BufferWikiPage startPage, BufferWikiPage endPage) {
+        long startTime = System.currentTimeMillis();
+        int[] routeIds = RouteFinder.find(startPage.getId(), endPage.getId(), mapper, reverseMapper);
+        List<BufferWikiPage> path = Arrays.stream(routeIds).mapToObj(id -> {
+            BufferWikiPage needle = BufferWikiPage.createFrom(id, new int[0], "ignored", false);
+            int index = Collections.binarySearch(pagesById, needle, byId());
+            return pagesById.get(index);
+        }).collect(Collectors.toList());
         return new Result(path, System.currentTimeMillis() - startTime);
     }
 
-    private static HashIntIntMap constructIdIndexMap(List<BufferWikiPage> pages) {
-        long startTime = System.currentTimeMillis();
-        logger.info("Starting to construct id -> index map");
-        HashIntIntMap map = HashIntIntMaps.getDefaultFactory()
-                .withHashConfig(HashConfig.fromLoads(0.1, 0.5, 0.75))
-                .withKeysDomain(Integer.MIN_VALUE, -1)
-                .newImmutableMap(mapCreator -> {
-                    for (int i = 0; i < pages.size(); i++) {
-                        final int shiftedId = shift(pages.get(i).getId());
-                        mapCreator.accept(shiftedId, i);
-                    }
-                }, pages.size());
-//        doSanityCheck(map, pages);
-        logger.info(() -> String.format("Took %d ms to create id -> index map", System.currentTimeMillis() - startTime));
-        return map;
-    }
-
-    private static OrderedPage[] constructLeanArray(List<BufferWikiPage> pages) {
-        logger.info("Starting to construct index-based map");
-        long startTime = System.currentTimeMillis();
-        OrderedPage[] leanPages = new OrderedPage[pages.size()];
-        HashIntIntMap map = constructIdIndexMap(pages);
-        Functions.IntInt mapper = value -> map.getOrDefault(shift(value), -1);
+    private static boolean isSorted(List<BufferWikiPage> pages, Comparator<? super BufferWikiPage> comparator) {
+        BufferWikiPage earlier = null;
         for (BufferWikiPage page : pages) {
-            int tableIndex = mapper.apply(page.getId());
-            leanPages[tableIndex] = OrderedPage.convert(page, mapper);
-        }
-        logger.info(() -> String.format("Took %d ms to create index-based map", System.currentTimeMillis() - startTime));
-        return leanPages;
-    }
-
-    private static List<BufferWikiPage> constructSortedNames(List<BufferWikiPage> pages) {
-        long startTime = System.currentTimeMillis();
-        if (!isSorted(pages)) {
-            logger.info("Starting to sort names");
-            Collections.sort(pages);
-            logger.info(() -> String.format("Took %d ms to sort names", System.currentTimeMillis() - startTime));
-        }
-        return pages;
-    }
-
-    private static boolean isSorted(List<BufferWikiPage> pagesArray) {
-        for (int i = 0; i < pagesArray.size() - 1; i++) {
-            int comp = pagesArray.get(i).compareTitle(pagesArray.get(i + 1));
-            if (comp > 0) return false;
+            if (earlier != null) {
+                int comp = comparator.compare(earlier, page);
+                if (comp > 0) return false;
+            }
+            earlier = page;
         }
         return true;
     }
@@ -124,11 +110,10 @@ public class WikiRoutes {
 
     public List<String> findWildcards(String prefix, int maxMatches) {
         List<String> matches = Lists.newArrayList();
-        BufferWikiPage p = pages.get(0);
-        int ix = Collections.binarySearch(pages, p.createTempFor(prefix), BufferWikiPage::compareTitle);
+        int ix = findPageByName(prefix);
         final int startingPoint = ix < 0 ? -ix - 1 : ix;
-        for (int i = startingPoint; i < pages.size(); i++) {
-            String title = pages.get(i).getTitle();
+        for (int i = startingPoint; i < pagesByTitle.size(); i++) {
+            String title = pagesByTitle.get(i).getTitle();
             if (title.startsWith(prefix) && matches.size() < maxMatches) {
                 matches.add(title);
             } else {
@@ -139,16 +124,14 @@ public class WikiRoutes {
     }
 
     private BufferWikiPage getPage(String name) {
-        int ix = getPageIndex(name);
+        int ix = findPageByName(name);
         if (ix < 0) return null;
-        return pages.get(ix);
+        return pagesByTitle.get(ix);
     }
 
-    private int getPageIndex(String name) {
-        BufferWikiPage p = pages.get(0);
-        int ix = Collections.binarySearch(pages, p.createTempFor(name), BufferWikiPage::compareTitle);
-        if (ix < 0) return -1;
-        return ix;
+    private int findPageByName(String name) {
+        BufferWikiPage target = BufferWikiPage.createTempFor(name);
+        return Collections.binarySearch(pagesByTitle, target, BufferWikiPage::compareTitle);
     }
 
     public static class BadRouteException extends Exception {
@@ -192,50 +175,134 @@ public class WikiRoutes {
         }
     }
 
-    private static int shift(int val) {
-        return -val - 1;
-    }
-
     public interface PageMapper {
         void forEachLinkIndex(int pageIndex, IntConsumer c);
         int getSize();
     }
 
     private static class LeanPageMapper implements PageMapper {
-        private final int[] index;
+        private final HashIntIntMap index;
         private final int[] links;
 
-        public LeanPageMapper(OrderedPage[] leanPages) {
-            long startTime = System.currentTimeMillis();
-            long linkCount = Stream.of(leanPages).collect(summingLong(p -> p.getTargetIndices().length));
+        private static int ADDITIONAL_INFO = 2;
 
-            links = new int[Ints.checkedCast(linkCount)];
-            index = new int[leanPages.length + 1];
-
-            int[] pageIndex = {0};
-            int[] linkIndex = {0};
-            Stream.of(leanPages).forEach(p -> {
-                index[pageIndex[0]++] = linkIndex[0];
-                p.forEachLinkIndex(i -> links[linkIndex[0]++] = i);
-            });
-            pageIndex[pageIndex.length - 1] = linkIndex[0];
-            logger.info(() -> String.format("Took %d ms to create page mapper", System.currentTimeMillis() - startTime));
+        private LeanPageMapper(HashIntIntMap index, int[] links) {
+            this.index = index;
+            this.links = links;
         }
 
         @Override
-        public void forEachLinkIndex(int pageIndex, IntConsumer c) {
-            int start = index[pageIndex];
-            int end = index[pageIndex + 1];
+        public void forEachLinkIndex(int pageId, IntConsumer c) {
+            int val = index.getOrDefault(pageId, -1);
+            // Not all pages are linked to.
+            if (val < 0) return;
+            final int linkCountIndex = val + 1;
+            final int linkCount = unshift(links[linkCountIndex]);
+            final int start = linkCountIndex + 1;
+            final int end = start + linkCount;
 
             for (int i = start; i < end; i++) {
                 c.accept(links[i]);
             }
         }
 
+        private LeanPageMapper reverse() {
+            long startTime = System.currentTimeMillis();
+            IntIntMap reverseCounts = HashIntIntMaps.newMutableMap(index.size());
+            int reverseLinkerCount = 0;
+            for (int targetIdOrCount : links) {
+                if (targetIdOrCount >= 0) {
+                    reverseCounts.addValue(targetIdOrCount, 1, 0);
+                    reverseLinkerCount++;
+                }
+            }
+            HashIntIntMap reversedIndex = HashIntIntMaps.newMutableMap(reverseCounts.size());
+            final int[] linkIndex = { 0 };
+            int[] reversedLinks = new int[Ints.checkedCast(reverseLinkerCount + ADDITIONAL_INFO * reverseCounts.size())];
+            reverseCounts.forEach((IntIntConsumer) (targetId, count) -> {
+                final int startLinkIndex = linkIndex[0];
+                reversedIndex.put(targetId, startLinkIndex);
+                reversedLinks[startLinkIndex] = shift(targetId);
+                reversedLinks[startLinkIndex + 1] = shift(0);
+                linkIndex[0] += count + ADDITIONAL_INFO;
+            });
+            int linkerId = -1;
+            int linkCount = -1;
+            int readLinkCount = 0;
+            for (int val : links) {
+                if (linkerId < 0) {
+                    linkerId = unshift(val);
+                } else if (linkCount < 0) {
+                    linkCount = unshift(val);
+                } else {
+                    final int targetId = val;
+                    final int startLinkIndex = reversedIndex.getOrDefault(targetId, Integer.MIN_VALUE);
+                    final int reverseLinkIndex = startLinkIndex + 1;
+                    final int reverseLinksWritten = unshift(reversedLinks[reverseLinkIndex]);
+                    final int newLinkerIndex = reverseLinkIndex + reverseLinksWritten + 1;
+                    reversedLinks[newLinkerIndex] = linkerId;
+                    reversedLinks[reverseLinkIndex] = shift(reverseLinksWritten + 1);
+                    readLinkCount++;
+                }
+                if (readLinkCount == linkCount) {
+                    readLinkCount = 0;
+                    linkerId = -1;
+                    linkCount = -1;
+                }
+            }
+            logger.info(() -> String.format("Took %d ms to create reverse page mapper", System.currentTimeMillis() - startTime));
+            return new LeanPageMapper(reversedIndex, reversedLinks);
+        }
+
+        private static LeanPageMapper convert(List<BufferWikiPage> pages) {
+            long startTime = System.currentTimeMillis();
+            long totalLinkCount = pages.stream().mapToLong(BufferWikiPage::getLinkCount).sum();
+            int[] links = new int[Ints.checkedCast(totalLinkCount) + ADDITIONAL_INFO * pages.size()];
+            HashIntIntMap map = HashIntIntMaps.getDefaultFactory()
+                                              .withHashConfig(HashConfig.fromLoads(0.1, 0.5, 0.75))
+                                              .newImmutableMap(mapCreator -> {
+                                                    final int[] linkIndex = { 0 };
+                                                    for (BufferWikiPage page : pages) {
+                                                        final int sourceId = page.getId();
+                                                        final int linkCount = page.getLinkCount();
+                                                        final int startLinkIndex = linkIndex[0];
+                                                        links[linkIndex[0]++] = shift(sourceId);
+                                                        links[linkIndex[0]++] = shift(linkCount);
+                                                        page.forEachLink(linkTarget -> {
+                                                            links[linkIndex[0]++] = linkTarget;
+                                                        });
+                                                        mapCreator.accept(sourceId, startLinkIndex);
+                                                    }
+                                              }, pages.size());
+
+            logger.info(() -> String.format("Took %d ms to create page mapper", System.currentTimeMillis() - startTime));
+            return new LeanPageMapper(map, links);
+        }
+
+        private static int shift(int val) { return -val - 1; }
+
+        private static int unshift(int val) { return shift(val); }
+
         @Override
         public int getSize() {
-            return index.length;
+            return index.size();
         }
+    }
+
+    private static void checkData(List<BufferWikiPage> leanPages) {
+        HashIntSet seenPages = HashIntSets.newMutableSet(leanPages.size());
+        HashIntSet seenLinkTargets = HashIntSets.newMutableSet(leanPages.size());
+        for (BufferWikiPage page : leanPages) {
+            seenPages.add(page.getId());
+            page.forEachLink(seenLinkTargets::add);
+        }
+        if (!seenPages.containsAll(seenLinkTargets)) {
+            throw new IllegalStateException();
+        }
+    }
+
+    private static Comparator<BufferWikiPage> byId() {
+        return (o1, o2) -> Integer.compare(o1.getId(), o2.getId());
     }
 
     public static class Result {

@@ -21,7 +21,6 @@ public interface LeanWikiPage<T extends LeanWikiPage<T>> extends Comparable<T> {
         return compareTitle(other);
     }
 
-    T createTempFor(String title);
     ByteBuffer getBuffer();
     int size();
 
