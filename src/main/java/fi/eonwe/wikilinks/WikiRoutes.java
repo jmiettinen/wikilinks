@@ -6,6 +6,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
 import java.util.function.IntConsumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -21,8 +22,6 @@ import net.openhft.koloboke.collect.hash.HashConfig;
 import net.openhft.koloboke.collect.map.IntIntMap;
 import net.openhft.koloboke.collect.map.hash.HashIntIntMap;
 import net.openhft.koloboke.collect.map.hash.HashIntIntMaps;
-import net.openhft.koloboke.collect.set.hash.HashIntSet;
-import net.openhft.koloboke.collect.set.hash.HashIntSets;
 import net.openhft.koloboke.function.IntIntConsumer;
 
 import static fi.eonwe.wikilinks.utils.Helpers.quote;
@@ -38,7 +37,14 @@ public class WikiRoutes {
 
     private static final Logger logger = Logger.getLogger(WikiRoutes.class.getCanonicalName());
     static {
-        logger.setLevel(Level.INFO);
+        String logLevel = System.getProperty("wikilinks.loglevel", "WARNING");
+        Level level;
+        try {
+            level = Level.parse(logLevel);
+        } catch (IllegalArgumentException e) {
+            level = Level.WARNING;
+        }
+        logger.setLevel(level);
     }
 
     public WikiRoutes(List<BufferWikiPage> pages) {
@@ -74,21 +80,21 @@ public class WikiRoutes {
     private void sortIfNeeded(List<BufferWikiPage> list, String name, Comparator<? super BufferWikiPage> comp) {
         long startTime = System.currentTimeMillis();
         if (!isSorted(list, comp)) {
-            logger.info("Starting to sort by " + name);
-            Collections.sort(list, comp);
-            logger.info(String.format("Took %d ms to sort by %s", System.currentTimeMillis() - startTime, name));
+            logger.info(() -> "Starting to sort by " + name);
+            list.sort(comp);
+            logger.info(() -> String.format("Took %d ms to sort by %s", System.currentTimeMillis() - startTime, name));
         }
     }
 
     private Result findRoute(BufferWikiPage startPage, BufferWikiPage endPage) {
-        long startTime = System.currentTimeMillis();
+        long startTime = System.nanoTime();
         int[] routeIds = RouteFinder.find(startPage.getId(), endPage.getId(), mapper, reverseMapper);
         List<BufferWikiPage> path = Arrays.stream(routeIds).mapToObj(id -> {
             BufferWikiPage needle = BufferWikiPage.createFrom(id, new int[0], "ignored", false);
             int index = Collections.binarySearch(pagesById, needle, byId());
             return pagesById.get(index);
         }).collect(Collectors.toList());
-        return new Result(path, System.currentTimeMillis() - startTime);
+        return new Result(path, System.nanoTime() - startTime);
     }
 
     private static boolean isSorted(List<BufferWikiPage> pages, Comparator<? super BufferWikiPage> comparator) {
@@ -177,7 +183,6 @@ public class WikiRoutes {
 
     public interface PageMapper {
         void forEachLinkIndex(int pageIndex, IntConsumer c);
-        int getSize();
     }
 
     private static class LeanPageMapper implements PageMapper {
@@ -197,7 +202,7 @@ public class WikiRoutes {
             // Not all pages are linked to.
             if (val < 0) return;
             final int linkCountIndex = val + 1;
-            final int linkCount = unshift(links[linkCountIndex]);
+            final int linkCount = unShift(links[linkCountIndex]);
             final int start = linkCountIndex + 1;
             final int end = start + linkCount;
 
@@ -226,19 +231,26 @@ public class WikiRoutes {
                 reversedLinks[startLinkIndex + 1] = shift(0);
                 linkIndex[0] += count + ADDITIONAL_INFO;
             });
+            fillLinks(reversedLinks, reversedIndex);
+            logger.info(() -> String.format("Took %d ms to create reverse page mapper", System.currentTimeMillis() - startTime));
+            return new LeanPageMapper(reversedIndex, reversedLinks);
+        }
+
+        private void fillLinks(int[] reversedLinks, HashIntIntMap reversedIndex) {
             int linkerId = -1;
             int linkCount = -1;
             int readLinkCount = 0;
             for (int val : links) {
                 if (linkerId < 0) {
-                    linkerId = unshift(val);
+                    linkerId = unShift(val);
                 } else if (linkCount < 0) {
-                    linkCount = unshift(val);
+                    linkCount = unShift(val);
                 } else {
                     final int targetId = val;
                     final int startLinkIndex = reversedIndex.getOrDefault(targetId, Integer.MIN_VALUE);
                     final int reverseLinkIndex = startLinkIndex + 1;
-                    final int reverseLinksWritten = unshift(reversedLinks[reverseLinkIndex]);
+                    final int reverseLinksWrittenRaw = reversedLinks[reverseLinkIndex];
+                    final int reverseLinksWritten = unShift(reverseLinksWrittenRaw);
                     final int newLinkerIndex = reverseLinkIndex + reverseLinksWritten + 1;
                     reversedLinks[newLinkerIndex] = linkerId;
                     reversedLinks[reverseLinkIndex] = shift(reverseLinksWritten + 1);
@@ -250,8 +262,6 @@ public class WikiRoutes {
                     linkCount = -1;
                 }
             }
-            logger.info(() -> String.format("Took %d ms to create reverse page mapper", System.currentTimeMillis() - startTime));
-            return new LeanPageMapper(reversedIndex, reversedLinks);
         }
 
         private static LeanPageMapper convert(List<BufferWikiPage> pages) {
@@ -281,24 +291,7 @@ public class WikiRoutes {
 
         private static int shift(int val) { return -val - 1; }
 
-        private static int unshift(int val) { return shift(val); }
-
-        @Override
-        public int getSize() {
-            return index.size();
-        }
-    }
-
-    private static void checkData(List<BufferWikiPage> leanPages) {
-        HashIntSet seenPages = HashIntSets.newMutableSet(leanPages.size());
-        HashIntSet seenLinkTargets = HashIntSets.newMutableSet(leanPages.size());
-        for (BufferWikiPage page : leanPages) {
-            seenPages.add(page.getId());
-            page.forEachLink(seenLinkTargets::add);
-        }
-        if (!seenPages.containsAll(seenLinkTargets)) {
-            throw new IllegalStateException();
-        }
+        private static int unShift(int val) { return shift(val); }
     }
 
     private static Comparator<BufferWikiPage> byId() {
@@ -308,11 +301,11 @@ public class WikiRoutes {
     public static class Result {
 
         private final List<BufferWikiPage> route;
-        private final long runtime;
+        private final long runtimeInNanos;
 
-        private Result(List<BufferWikiPage> route, long runtime) {
+        private Result(List<BufferWikiPage> route, long runtimeInNanos) {
             this.route = route;
-            this.runtime = runtime;
+            this.runtimeInNanos = runtimeInNanos;
         }
 
         List<BufferWikiPage> getRoute() {
@@ -320,7 +313,7 @@ public class WikiRoutes {
         }
 
         public long getRuntime() {
-            return runtime;
+            return TimeUnit.NANOSECONDS.toMillis(runtimeInNanos);
         }
 
         public String toString() {

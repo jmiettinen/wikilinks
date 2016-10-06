@@ -10,7 +10,12 @@ public class BufferWikiSerialization extends AbstractSerialization<BufferWikiPag
     private static final int VERSION_NUMBER = 0x823890 + 1;
 
     public BufferWikiSerialization() {
-        super(BufferWikiPage::new);
+        super((buffer, offset) -> {
+            BufferWikiPage page = new BufferWikiPage(buffer, offset);
+            // Cache it here.
+            page.getId();
+            return page;
+        });
     }
 
     @Override

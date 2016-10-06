@@ -124,9 +124,9 @@ public class BufferWikiPage implements LeanWikiPage<BufferWikiPage> {
         int id = this.id;
         if (id == Integer.MIN_VALUE) {
             int rawId = getRawId();
-            id = rawId < 0 ? -rawId : rawId;
+            this.id = id = rawId;
         }
-        return id;
+        return id < 0 ? -id : id;
     }
 
     @Override
