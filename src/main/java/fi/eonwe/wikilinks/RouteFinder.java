@@ -1,17 +1,17 @@
 package fi.eonwe.wikilinks;
 
-import com.google.common.collect.Iterables;
-import com.google.common.collect.Lists;
-import com.google.common.primitives.Ints;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.stream.StreamSupport;
+
+import javax.annotation.Nullable;
+
 import fi.eonwe.wikilinks.utils.IntQueue;
 import net.openhft.koloboke.collect.map.IntIntMap;
 import net.openhft.koloboke.collect.map.hash.HashIntIntMaps;
 import net.openhft.koloboke.function.IntIntConsumer;
-
-import java.util.Collections;
-import java.util.List;
-
-import javax.annotation.Nullable;
 
 /**
  */
@@ -63,32 +63,33 @@ public class RouteFinder {
         boolean backwardIsTooBig = false;
 
         while (!backwardQueue.isEmpty() && !forwardQueue.isEmpty()) {
+            boolean foundRoute = false;
             if (!forwardIsTooBig || backwardIsTooBig) {
-                final int forwardId = forwardQueue.removeFirst();
-                if (backwardPrev.containsKey(forwardId)) {
-                    return recordRoute(startIndex, endIndex, forwardPrev, backwardPrev);
-                }
-                mapper.forEachLinkIndex(forwardId, linkId -> {
-                    if (forwardPrev.putIfAbsent(linkId, forwardId) == NOT_FOUND) {
-                        forwardQueue.addLast(linkId);
-                    }
-                });
+                foundRoute = findRoute(forwardQueue, forwardPrev, mapper, backwardPrev);
                 forwardIsTooBig = forwardPrev.size() > TOO_BIG;
             }
-            if (!backwardIsTooBig || forwardIsTooBig) {
-                final int backwardId = backwardQueue.removeFirst();
-                if (forwardPrev.containsKey(backwardId)) {
-                    return recordRoute(startIndex, endIndex, forwardPrev, backwardPrev);
-                }
-                reverseMapper.forEachLinkIndex(backwardId, linkId -> {
-                    if (backwardPrev.putIfAbsent(linkId, backwardId) == NOT_FOUND) {
-                        backwardQueue.addLast(linkId);
-                    }
-                });
+            if (!foundRoute && (!backwardIsTooBig || forwardIsTooBig)) {
+                foundRoute = findRoute(backwardQueue, backwardPrev, reverseMapper, forwardPrev);
                 backwardIsTooBig = backwardPrev.size() > TOO_BIG;
+            }
+            if (foundRoute) {
+                return recordRoute(startIndex, endIndex, forwardPrev, backwardPrev);
             }
         }
         return new int[0];
+    }
+
+    private static boolean findRoute(IntQueue queue, IntIntMap prevMap, WikiRoutes.PageMapper mapper, IntIntMap reversePrevMap) {
+        final int id = queue.removeFirst();
+        if (reversePrevMap.containsKey(id)) {
+            return true;
+        }
+        mapper.forEachLinkIndex(id, linkId -> {
+            if (prevMap.putIfAbsent(linkId, id) == NOT_FOUND) {
+                queue.addLast(linkId);
+            }
+        });
+        return false;
     }
 
     private int[] find() {
@@ -103,7 +104,7 @@ public class RouteFinder {
         while (!queue.isEmpty()) {
             final int pageId = queue.removeFirst();
             if (pageId == endIndex) {
-                return Ints.toArray(recordRoute(startIndex, endIndex, previous));
+                return toInt(recordRoute(startIndex, endIndex, previous));
             }
             mapper.forEachLinkIndex(pageId, linkId -> {
                 if (previous.putIfAbsent(linkId, pageId) == NOT_FOUND) {
@@ -115,7 +116,7 @@ public class RouteFinder {
         return new int[0];
     }
 
-    private int countPath(IntIntMap map, int startIndex, int endIndex) {
+    private static int countPath(IntIntMap map, int startIndex, int endIndex) {
         int size = 0;
         int cur = startIndex;
         while ((cur = map.getOrDefault(cur, endIndex)) != endIndex) {
@@ -124,8 +125,8 @@ public class RouteFinder {
         return size;
     }
 
-    private int[] recordRoute(int startIndex, int endIndex, IntIntMap forwardPrev, IntIntMap backwardPrev) {
-        int[] bestPath = { -1, Integer.MAX_VALUE };
+    private static int[] recordRoute(int startIndex, int endIndex, IntIntMap forwardPrev, IntIntMap backwardPrev) {
+        int[] bestPath = { NOT_FOUND, Integer.MAX_VALUE };
         final int scoreIndex = bestPath.length - 1;
         backwardPrev.forEach((IntIntConsumer) (target, source) -> {
             if (forwardPrev.containsKey(target)) {
@@ -141,11 +142,28 @@ public class RouteFinder {
         List<Integer> firstPart = recordRoute(startIndex, bestPath[0], forwardPrev);
         List<Integer> secondPart = recordRoute(endIndex, bestPath[0], backwardPrev);
         Collections.reverse(secondPart);
-        return Ints.toArray(Lists.newArrayList(Iterables.concat(firstPart.subList(1, firstPart.size()), secondPart)));
+        final List<Integer> firstPartSplit;
+        final List<Integer> secondPartSplit;
+        if (firstPart.size() > 1) {
+            firstPartSplit = firstPart.subList(0, firstPart.size() - 1);
+            secondPartSplit = secondPart;
+        } else {
+            firstPartSplit = firstPart;
+            secondPartSplit = secondPart.subList(1, secondPart.size());
+        }
+        return toInt(firstPartSplit, secondPartSplit);
     }
 
-    private List<Integer> recordRoute(int startIndex, int endIndex, IntIntMap previous) {
-        List<Integer> list = Lists.newArrayList();
+    @SafeVarargs
+    private static int[] toInt(Iterable<? extends Integer> ... values) {
+        return Arrays.stream(values)
+                     .flatMap(iter -> StreamSupport.stream(iter.spliterator(), false))
+                     .mapToInt(Integer::intValue)
+                     .toArray();
+    }
+
+    private static List<Integer> recordRoute(int startIndex, int endIndex, IntIntMap previous) {
+        List<Integer> list = new ArrayList<>();
         int cur = endIndex;
         do {
             list.add(cur);

@@ -78,7 +78,7 @@ public class WikiRoutes {
         return pagesByTitle.get(i).getTitle();
     }
 
-    private void sortIfNeeded(List<BufferWikiPage> list, String name, Comparator<? super BufferWikiPage> comp) {
+    private static void sortIfNeeded(List<BufferWikiPage> list, String name, Comparator<? super BufferWikiPage> comp) {
         long startTime = System.currentTimeMillis();
         if (!isSorted(list, comp)) {
             logger.info(() -> "Starting to sort by " + name);
@@ -130,6 +130,7 @@ public class WikiRoutes {
         return matches;
     }
 
+    @Nullable
     private BufferWikiPage getPage(String name) {
         int ix = findPageByName(name);
         if (ix < 0) return null;
@@ -150,7 +151,7 @@ public class WikiRoutes {
         private final String endName;
 
 
-        public BadRouteException(boolean startDoesNotExist, boolean endDoesNotExist, String startName, String endName) {
+        public BadRouteException(boolean startDoesNotExist, boolean endDoesNotExist, @Nullable String startName, @Nullable String endName) {
             this.startDoesNotExist = startDoesNotExist;
             this.endDoesNotExist = endDoesNotExist;
             this.startName = startName;
@@ -169,10 +170,12 @@ public class WikiRoutes {
             return !endDoesNotExist;
         }
 
+        @Nullable
         public String getStartName() {
             return startName;
         }
 
+        @Nullable
         public String getEndName() {
             return endName;
         }
@@ -256,6 +259,7 @@ public class WikiRoutes {
             });
         }
 
+        @SuppressWarnings("AssignmentToForLoopParameter")
         private static void visitLinkArray(int[] linkArray, Functions.IntIntIntIntProcedure procedure) {
             int linkerId = -1;
             for (int i = 0; i < linkArray.length;) {

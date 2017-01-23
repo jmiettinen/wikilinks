@@ -1,11 +1,11 @@
 package fi.eonwe.wikilinks;
 
-import fi.eonwe.wikilinks.utils.Helpers;
-
 import java.io.BufferedReader;
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
+
+import fi.eonwe.wikilinks.utils.Helpers;
 
 import static fi.eonwe.wikilinks.utils.Helpers.quote;
 
@@ -29,7 +29,7 @@ public class Interactive {
                 if (matches.isEmpty()) {
                     System.out.printf("No articles start with %s%n", quote(prefix));
                 } else {
-                    System.out.printf("At least these articles start with %s: %s%n", quote(prefix), Arrays.asList(matches.stream().map(Helpers::quote).toArray()));
+                    System.out.printf("At least these articles start with %s: %s%n", quote(prefix), matches.stream().map(Helpers::quote).collect(Collectors.toList()));
                 }
             } else if (trimmed.equals(randomPage)) {
                 String page = routes.getRandomPage();
