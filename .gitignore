@@ -2,3 +2,4 @@ src/data/
 target
 **/.DS_Store
 *.serialized
+data/*
