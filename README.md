@@ -16,6 +16,12 @@ Start by compiling and packaging everything into one uber-jar
 ```
 ./mwnv package
 ```
+Or on Windows,
+```
+mvnw package
+```
+
+
 Then to convert `mywikidumnp.xml.bz2` to a more compressed format `my_wiki.dump`, run
 ```
 java -jar -x mywikidumnp.xml.bz2 -o my_wiki.dump
@@ -44,6 +50,12 @@ Route: "Foobar" -> "World War II" -> "Central Powers" -> "Finland" (in 29 ms)
 ```
 
 Inputting `<` to the prompt will give you a random page.
+
+### Unix
+
+On Unixy operating systems, you can supply profile unix to Maven with `./mvnw package -Punix`.
+
+After this, you can replace `java -jar target/wikilinks.jar` with `target/wikilinks`.
 
 ## Development
 
