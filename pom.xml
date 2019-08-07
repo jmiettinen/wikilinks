@@ -15,6 +15,7 @@
         <uber-jar-name>wikilinks</uber-jar-name>
         <shell-jar-path>${project.build.directory}/wikilinks</shell-jar-path>
         <run-slow-tests>FALSE</run-slow-tests>
+        <java-version>11</java-version>
     </properties>
 
     <dependencies>
@@ -97,8 +98,10 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.8.0</version>
                 <configuration>
-                    <source>1.8</source>
-                    <target>1.8</target>
+                    <compilerVersion>${java-version}</compilerVersion>
+                    <source>${java-version}</source>
+                    <target>${java-version}</target>
+                    <release>${java-version}</release>
                     <debug>true</debug>
                     <encoding>UTF-8</encoding>
                     <compilerArgs>
@@ -119,22 +122,23 @@
                 </configuration>
             </plugin>
             <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-shade-plugin</artifactId>
-                <version>3.2.1</version>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <version>2.1.7.RELEASE</version>
+                <configuration>
+                    <mainClass>fi.eonwe.wikilinks.Main</mainClass>
+                    <finalName>${uber-jar-name}</finalName>
+                    <layout>ZIP</layout>
+                </configuration>
                 <executions>
                     <execution>
-                        <id>shade-jar</id>
-                        <phase>package</phase>
                         <goals>
-                            <goal>shade</goal>
+                            <goal>repackage</goal>
                         </goals>
                     </execution>
                 </executions>
-                <configuration>
-                    <finalName>${uber-jar-name}</finalName>
-                </configuration>
             </plugin>
+
         </plugins>
     </build>
 

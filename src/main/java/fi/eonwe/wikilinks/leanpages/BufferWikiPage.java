@@ -206,16 +206,4 @@ public class BufferWikiPage implements LeanWikiPage<BufferWikiPage> {
         return String.format("\"%s\" (#%d), %d links", getTitle(), getId(), getLinkCount());
     }
 
-    private static boolean isSorted(int[] array) {
-        if (array.length >= 2) {
-            int earlier = array[0];
-            for (int i = 1; i < array.length; i++) {
-                int current = array[i];
-                if (current < earlier) return false;
-                earlier = current;
-            }
-        }
-        return true;
-    }
-
 }
