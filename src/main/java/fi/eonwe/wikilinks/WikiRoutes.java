@@ -18,6 +18,7 @@ import com.google.common.base.Joiner;
 import com.google.common.collect.Lists;
 import com.google.common.primitives.Ints;
 import fi.eonwe.wikilinks.leanpages.BufferWikiPage;
+import fi.eonwe.wikilinks.leanpages.LeanWikiPage;
 import fi.eonwe.wikilinks.utils.Functions;
 import net.openhft.koloboke.collect.hash.HashConfig;
 import net.openhft.koloboke.collect.map.IntIntMap;
@@ -91,8 +92,7 @@ public class WikiRoutes {
         long startTime = System.nanoTime();
         int[] routeIds = RouteFinder.find(startPage.getId(), endPage.getId(), mapper, reverseMapper);
         List<BufferWikiPage> path = Arrays.stream(routeIds).mapToObj(id -> {
-            BufferWikiPage needle = BufferWikiPage.createFrom(id, new int[0], "ignored", false);
-            int index = Collections.binarySearch(pagesById, needle, byId());
+            int index = findPageIndex(pagesById, id);
             return pagesById.get(index);
         }).collect(Collectors.toList());
         return new Result(path, System.nanoTime() - startTime);
@@ -142,47 +142,14 @@ public class WikiRoutes {
         return Collections.binarySearch(pagesByTitle, target, BufferWikiPage::compareTitle);
     }
 
-    public static class BadRouteException extends Exception {
-
-        private final boolean startDoesNotExist;
-        private final boolean endDoesNotExist;
-
-        private final String startName;
-        private final String endName;
+    private static Comparator<BufferWikiPage> byId() {
+        return (o1, o2) -> Integer.compare(o1.getId(), o2.getId());
+    }
 
 
-        public BadRouteException(boolean startDoesNotExist, boolean endDoesNotExist, @Nullable String startName, @Nullable String endName) {
-            this.startDoesNotExist = startDoesNotExist;
-            this.endDoesNotExist = endDoesNotExist;
-            this.startName = startName;
-            this.endName = endName;
-        }
-
-        public BadRouteException(String startName, String endName) {
-            this(false, false, startName, endName);
-        }
-
-        public boolean startExists() {
-            return !startDoesNotExist;
-        }
-
-        public boolean endExist() {
-            return !endDoesNotExist;
-        }
-
-        @Nullable
-        public String getStartName() {
-            return startName;
-        }
-
-        @Nullable
-        public String getEndName() {
-            return endName;
-        }
-
-        public boolean noRouteFound() {
-            return startExists() && endExist();
-        }
+    private static int findPageIndex(List<BufferWikiPage> pages, int id) {
+        BufferWikiPage needle = BufferWikiPage.createFrom(id, new int[0], "ignored", false);
+        return Collections.binarySearch(pages, needle, byId());
     }
 
     public interface PageMapper {
@@ -303,10 +270,6 @@ public class WikiRoutes {
         }
     }
 
-    private static Comparator<BufferWikiPage> byId() {
-        return (o1, o2) -> Integer.compare(o1.getId(), o2.getId());
-    }
-
     public static class Result {
 
         private final List<BufferWikiPage> route;
@@ -317,7 +280,7 @@ public class WikiRoutes {
             this.runtimeInNanos = runtimeInNanos;
         }
 
-        List<BufferWikiPage> getRoute() {
+        List<? extends LeanWikiPage<?>> getRoute() {
             return route;
         }
 

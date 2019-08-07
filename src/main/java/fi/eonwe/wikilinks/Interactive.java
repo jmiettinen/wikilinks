@@ -68,7 +68,7 @@ public class Interactive {
                 routeString = "Route: " + route.toString();
             }
             result = String.format("%s (in %d ms)", routeString, route.getRuntime());
-        } catch (WikiRoutes.BadRouteException e) {
+        } catch (BadRouteException e) {
             if (e.endExist()) {
                 if (e.startExists()) {
                     result = String.format("No route found between %s and %s", e.getStartName(), e.getEndName());

@@ -26,7 +26,7 @@ public class Benchmarking {
                 long totalTime = System.currentTimeMillis() - startTime;
                 System.out.printf("%s (%d ms)%n", result.getRoute().isEmpty() ? "Found no route" : "Found route " + result.toString(), totalTime);
                 runtimes[i] = totalTime;
-            } catch (WikiRoutes.BadRouteException e) {
+            } catch (BadRouteException e) {
                 // Not going to happen.
             }
         }
@@ -51,7 +51,7 @@ public class Benchmarking {
                 String statusString = foundSize == expectedSize ? "OK" : "FAIL";
                 System.out.printf(" Found route length %d (%d expected) (%d ms) [%s]%n", foundSize, expectedSize, totalTime, statusString);
                 runtimes[i] = totalTime;
-            } catch (WikiRoutes.BadRouteException e) {
+            } catch (BadRouteException e) {
                 // Not going to happen.
             }
         }

@@ -12,8 +12,8 @@ public class BufferWikiSerialization extends AbstractSerialization<BufferWikiPag
     public BufferWikiSerialization() {
         super((buffer, offset) -> {
             BufferWikiPage page = new BufferWikiPage(buffer, offset);
-            // Cache it here.
-            page.getId();
+            // Fetch the id now as we have it in memory.
+            page.fetchAndStoreId();
             return page;
         });
     }

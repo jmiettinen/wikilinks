@@ -82,7 +82,7 @@ public class WikiLinksTest {
     }
 
     @Test(timeout = 1000L)
-    public void itResolvesInfinityRedirects() {
+    public void itResolvesInfiniteRedirects() {
         Map<String, PagePointer> map = Maps.newHashMap();
         WikiRedirectPage fooDir = new WikiRedirectPage("foo-redir", 0, "foo-foo-foo-redir");
         WikiRedirectPage foofooDir = new WikiRedirectPage("foo-foo-redir", 1, "foo-redir");
@@ -102,7 +102,7 @@ public class WikiLinksTest {
         assertThat(nonNullCount[0], is(2));
     }
 
-    private HashObjObjMap<String, PagePointer> convert(Map<String, PagePointer> map) {
+    private static HashObjObjMap<String, PagePointer> convert(Map<String, PagePointer> map) {
         return HashObjObjMaps.newImmutableMap(map);
     }
 
@@ -113,7 +113,7 @@ public class WikiLinksTest {
         List<BufferWikiPage> packedWikiPages = WikiProcessor.packPages(convert(map));
         for (int i = 0; i < map.size(); i++) {
             BufferWikiPage page = packedWikiPages.get(i);
-            assertThat(page.getId(), is(equalTo(Integer.valueOf(i))));
+            assertThat(page.getId(), is(equalTo(i)));
             assertThat(page.getTitle(), is(equalTo("title_" + i)));
         }
     }
@@ -137,7 +137,7 @@ public class WikiLinksTest {
                 }
             }
             String title = titlePrefix + i;
-            pointers[i].page = new WikiPageData(title, i, pagePointers.toArray(new PagePointer[pagePointers.size()]));
+            pointers[i].page = new WikiPageData(title, i, pagePointers.toArray(new PagePointer[0]));
             map.put(title, pointers[i]);
         }
         return map;
@@ -211,7 +211,6 @@ public class WikiLinksTest {
         fos.close();
         FileInputStream fin = new FileInputStream(tmpFile);
         FileChannel fc = fin.getChannel();
-        long size = fc.size();
         List<BufferWikiPage> readFromFile = serializer.readFromSerialized(fc);
 
         assertThat(readFromFile.size(), is(readFromXml.size()));

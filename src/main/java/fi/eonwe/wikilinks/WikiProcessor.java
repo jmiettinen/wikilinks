@@ -47,6 +47,8 @@ public class WikiProcessor {
                         String text = article.getText();
                         if (text == null) text = "";
                         WikiPatternMatcher matcher = new WikiPatternMatcher(text);
+                        // The page identifier is assumed to integer. I don't think this is actually guaranteed anywhere
+                        // in wikimedia XML schema (if it exists), but so far I've only encountered number < 2^31.
                         int id = Integer.parseInt(article.getId());
                         WikiPage page;
                         if (matcher.isRedirect()) {

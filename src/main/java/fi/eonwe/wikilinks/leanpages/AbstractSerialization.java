@@ -17,6 +17,8 @@ import java.util.NoSuchElementException;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 
+import javax.annotation.Nullable;
+
 /**
  */
 public abstract class AbstractSerialization<T extends LeanWikiPage<T>> {
@@ -59,11 +61,6 @@ public abstract class AbstractSerialization<T extends LeanWikiPage<T>> {
             lastOffset[0] = offset;
             readCount[0] = curReadCount;
         }
-    }
-
-    public List<T> readFromSerialized(FileInputStream fis) throws IOException {
-        FileChannel channel = fis.getChannel();
-        return readFromSerialized(fromFileChannel(channel));
     }
 
     public List<T> readFromSerialized(FileChannel buffer) throws IOException {
@@ -144,7 +141,7 @@ public abstract class AbstractSerialization<T extends LeanWikiPage<T>> {
                 int[] lastOffset = { 0 };
                 int[] readCount = { 0 };
                 int count;
-                T next = null;
+                @Nullable T next = null;
                 {
                     try {
                         buffer = bufferProvider.map(startOffset, readSize);
@@ -193,12 +190,6 @@ public abstract class AbstractSerialization<T extends LeanWikiPage<T>> {
         }
     }
 
-    private interface ExceptionRunnable<T extends Exception> {
-
-        void run() throws T;
-
-    }
-
     public void serialize(Collection<T> graph, WritableByteChannel channel) throws IOException {
         serialize(graph.stream(), graph.size(), channel);
     }
@@ -226,10 +217,10 @@ public abstract class AbstractSerialization<T extends LeanWikiPage<T>> {
         }
     }
 
-    private BufferProvider fromByteBuffer(ByteBuffer buffer) {
+    private static BufferProvider fromByteBuffer(ByteBuffer buffer) {
         return new BufferProvider() {
             @Override
-            public ByteBuffer map(long startOffset, long size) throws IOException {
+            public ByteBuffer map(long startOffset, long size) {
                 if (startOffset < 0 || size < 0 || startOffset + size > buffer.limit()) {
                     throw new IllegalArgumentException("offset " + startOffset + ", size " + size);
                 }
@@ -240,7 +231,7 @@ public abstract class AbstractSerialization<T extends LeanWikiPage<T>> {
             }
 
             @Override
-            public long size() throws IOException {
+            public long size() {
                 return buffer.limit();
             }
         };
@@ -250,7 +241,7 @@ public abstract class AbstractSerialization<T extends LeanWikiPage<T>> {
         return buffer.order(ByteOrder.BIG_ENDIAN);
     }
 
-    private BufferProvider fromFileChannel(FileChannel channel) {
+    private static BufferProvider fromFileChannel(FileChannel channel) {
         return new BufferProvider() {
             @Override
             public ByteBuffer map(long startOffset, long size) throws IOException {

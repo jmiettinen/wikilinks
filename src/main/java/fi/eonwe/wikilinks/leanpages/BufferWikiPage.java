@@ -121,12 +121,16 @@ public class BufferWikiPage implements LeanWikiPage<BufferWikiPage> {
 
     @Override
     public int getId() {
+        fetchAndStoreId();
+        int id = this.id;
+        return id < 0 ? -id : id;
+    }
+
+    void fetchAndStoreId() {
         int id = this.id;
         if (id == Integer.MIN_VALUE) {
-            int rawId = getRawId();
-            this.id = id = rawId;
+            this.id = getRawId();
         }
-        return id < 0 ? -id : id;
     }
 
     @Override

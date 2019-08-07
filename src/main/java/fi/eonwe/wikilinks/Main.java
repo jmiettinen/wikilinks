@@ -28,7 +28,6 @@ import java.util.List;
 import javax.annotation.Nullable;
 
 /**
- * Hello world!
  */
 public class Main {
 
@@ -147,7 +146,7 @@ public class Main {
 
     private static List<BufferWikiPage> readFromSerialized(FileInputStream fis) {
         try {
-            return new BufferWikiSerialization().readFromSerialized(fis);
+            return new BufferWikiSerialization().readFromSerialized(fis.getChannel());
         } catch (IOException e) {
             return handleError(e);
         }
