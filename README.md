@@ -10,7 +10,7 @@ can then read quickly and queried.
 
 ## Usage
 
-To start you'll need to have Java 8, a Wikipedia dump and a Internet connection
+To start you'll need to have Java 11, a Wikipedia dump and a Internet connection
 
 Start by compiling and packaging everything into one uber-jar
 ```
