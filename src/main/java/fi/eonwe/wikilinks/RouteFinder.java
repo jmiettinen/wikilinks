@@ -125,6 +125,21 @@ public class RouteFinder {
         return size;
     }
 
+    /**
+     * With the following graph (here - depict a link from article on the left to the one on right)
+     * <pre>
+     *     a - b - d
+     *       /   \
+     *     e - f - g - h - i
+     * </pre>
+     * When searching for connection from a to i we'll start the search from both and i. As the search progresses,
+     * we might have two routes [a, b, g] and [i, h, g]. This method then combines them to form path [a,b, g, h, i].
+     * @param startIndex Index we start the search from
+     * @param endIndex Index we want to end in
+     * @param forwardPrev Mapping of index to the index that lead to it when searching forwards in graph
+     * @param backwardPrev Mapping of index to the index that lead to it when searching backwards in graph
+     * @return A route of indices [startIndex, ... indices on the route, endIndex] or an empty array if no route was found.
+     */
     private static int[] recordRoute(int startIndex, int endIndex, IntIntMap forwardPrev, IntIntMap backwardPrev) {
         int[] bestPath = { NOT_FOUND, Integer.MAX_VALUE };
         final int scoreIndex = bestPath.length - 1;
@@ -144,6 +159,7 @@ public class RouteFinder {
         Collections.reverse(secondPart);
         final List<Integer> firstPartSplit;
         final List<Integer> secondPartSplit;
+        // We'll drop the index that was found both ways.
         if (firstPart.size() > 1) {
             firstPartSplit = firstPart.subList(0, firstPart.size() - 1);
             secondPartSplit = secondPart;

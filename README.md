@@ -64,7 +64,7 @@ usage should never be high and memory requirements should be small enough to run
 server.
 
 This and Java's lack of value-types lead to development of flyweight pages presented by `BufferWikiPage` and
-serialization handled by `BufferWikiSerialization`.
+serialization handled by `BufferWikiSerialization`. And inordinate amount of primitive value use + low abstraction. 
 
 This is all needless work and should be by some other mechanism that offers flyweight view into a nicely packed binary
 presentation such as [Protocol buffers](https://developers.google.com/protocol-buffers/).
