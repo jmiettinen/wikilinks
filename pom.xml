@@ -101,6 +101,9 @@
                     <target>1.8</target>
                     <debug>true</debug>
                     <encoding>UTF-8</encoding>
+                    <compilerArgs>
+                        <arg>-Xlint:all,-options,-path</arg>
+                    </compilerArgs>
                 </configuration>
             </plugin>
             <plugin>
@@ -153,7 +156,7 @@
                                 </goals>
                                 <configuration>
                                     <executable>/bin/sh</executable>
-                                    <commandlineArgs>-c 'rm ${shell-jar-path} ; cat ${project.basedir}/src/main/resources/shell_runner.sh ${build.directory}/${uber-jar-name}.jar > ${shell-jar-path} &amp;&amp; chmod 700 ${shell-jar-path}'
+                                    <commandlineArgs>-c 'rm ${shell-jar-path} ; cat ${project.basedir}/src/main/resources/shell_runner.sh ${project.build.directory}/${uber-jar-name}.jar > ${shell-jar-path} &amp;&amp; chmod 700 ${shell-jar-path}'
                                     </commandlineArgs>
                                 </configuration>
                             </execution>

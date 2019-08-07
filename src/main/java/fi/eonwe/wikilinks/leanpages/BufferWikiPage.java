@@ -27,7 +27,7 @@ public class BufferWikiPage implements LeanWikiPage<BufferWikiPage> {
     private final int offset;
     private int id = Integer.MIN_VALUE;
 
-    private final static long[] EMPTY_ARRAY = new long[0];
+    private static final int[] EMPTY_ARRAY = new int[0];
 
     private static int getHeaderSize() {
         return Integer.BYTES +
@@ -65,15 +65,6 @@ public class BufferWikiPage implements LeanWikiPage<BufferWikiPage> {
         return new BufferWikiPage(bufferFrom(id, links, title, isRedirect), 0);
     }
 
-    public static BufferWikiPage createFrom(long id, long[] links, String title, boolean isRedirect) {
-        int[] arr = new int[links.length];
-        for (int i = 0; i < arr.length; i++) {
-            arr[i] = Ints.checkedCast(links[i]);
-        }
-        if (!isSorted(arr)) Arrays.sort(arr);
-        return new BufferWikiPage(bufferFrom(Ints.checkedCast(id), arr, title, isRedirect), 0);
-    }
-
     @Override
     public int getTitleLength() {
         return data.getShort(offset + TITLE_SIZE_OFFSET);
@@ -81,7 +72,7 @@ public class BufferWikiPage implements LeanWikiPage<BufferWikiPage> {
 
     @Override
     public String getTitle() {
-        int stringSize = data.getShort(relativeOffset(TITLE_SIZE_OFFSET));
+        int stringSize = getTitleLength();
         int offset = relativeOffset(data.getInt(relativeOffset(TITLE_OFFSET)));
         byte[] dataArray;
         if (data.hasArray()) {
@@ -144,8 +135,8 @@ public class BufferWikiPage implements LeanWikiPage<BufferWikiPage> {
         ByteBuffer d1 = data;
         ByteBuffer d2 = that.data;
 
-        final int s1 = d1.getShort(this.relativeOffset(TITLE_SIZE_OFFSET));
-        final int s2 = d2.getShort(that.relativeOffset(TITLE_SIZE_OFFSET));
+        final int s1 = getTitleLength();
+        final int s2 = that.getTitleLength();
 
         final int minSize = Math.min(s1, s2);
 
@@ -166,6 +157,7 @@ public class BufferWikiPage implements LeanWikiPage<BufferWikiPage> {
         return createFrom(0, EMPTY_ARRAY, title, false);
     }
 
+    @Override
     public ByteBuffer getBuffer() {
         ByteBuffer copy = data.asReadOnlyBuffer();
         copy.position(offset);
@@ -183,6 +175,7 @@ public class BufferWikiPage implements LeanWikiPage<BufferWikiPage> {
             int i1 = offset;
             int i2 = other.offset;
             final ByteBuffer otherData = other.data;
+            // Compare by strides of long. To be really performative, this probably should do aligned access.
             for (; i1 + Long.BYTES < offset + len1; i1 += Long.BYTES, i2 += Long.BYTES) {
                 long v1 = data.getLong(i1);
                 long v2 = otherData.getLong(i2);
