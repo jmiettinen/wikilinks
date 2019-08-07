@@ -160,7 +160,7 @@
                                 </goals>
                                 <configuration>
                                     <executable>/bin/sh</executable>
-                                    <commandlineArgs>-c 'rm ${shell-jar-path} ; cat ${project.basedir}/src/main/resources/shell_runner.sh ${project.build.directory}/${uber-jar-name}.jar > ${shell-jar-path} &amp;&amp; chmod 700 ${shell-jar-path}'
+                                    <commandlineArgs>-c 'rm ${shell-jar-path} ; cat ${project.basedir}/src/other/shell_runner.sh ${project.build.directory}/${uber-jar-name}.jar > ${shell-jar-path} &amp;&amp; chmod 700 ${shell-jar-path}'
                                     </commandlineArgs>
                                 </configuration>
                             </execution>
