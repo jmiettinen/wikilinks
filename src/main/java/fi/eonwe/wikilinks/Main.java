@@ -31,6 +31,9 @@ import javax.annotation.Nullable;
  */
 public class Main {
 
+    private static final int HELP_SHOWN = 1;
+    private static final int GENERAL_ERROR = 2;
+
     private static final Options opts = new Options();
     private static final String XML_INPUT = "x";
     private static final String SERIALIZED_INPUT = "s";
@@ -59,28 +62,28 @@ public class Main {
     public static CommandLine parseOptions(String[] args) {
         CommandLineParser parser = new DefaultParser();
         try {
-            CommandLine commandLine = parser.parse(opts, args);
-            return commandLine;
+            return parser.parse(opts, args);
         } catch (ParseException e) {
             System.err.println(e.getMessage());
-            printHelpAndExit();
+            printHelp();
+            System.exit(HELP_SHOWN);
             return null;
         }
     }
 
-    private static void printHelpAndExit() {
+    private static void printHelp() {
         for (Object tmp : opts.getOptions()) {
             Option opt = (Option) tmp;
             System.out.printf("  -%s        %s%n", opt.getOpt(), opt.getDescription());
         }
-        System.exit(0);
     }
 
     public static void main(String[] args) {
         CommandLine commandLine = parseOptions(args);
         assert commandLine != null;
         if (commandLine.hasOption(DISPLAY_HELP) || commandLine.getOptions().length == 0) {
-            printHelpAndExit();
+            printHelp();
+            System.exit(HELP_SHOWN);
         }
         File inputFile;
         Source source;
@@ -111,7 +114,8 @@ public class Main {
             System.err.println("Cannot have interactive mode when reading from STDIN");
             System.exit(1);
         }
-        doRun(inputStream, inputFile, outputFile, source, mode);
+        int exitValue = doRun(inputStream, inputFile, outputFile, source, mode);
+        System.exit(exitValue);
     }
 
     @Nullable
@@ -140,7 +144,7 @@ public class Main {
             }
             return WikiProcessor.readPages(is);
         } catch (IOException e) {
-            return handleError(e);
+            return reportErrorAndExit(e);
         }
     }
 
@@ -148,23 +152,25 @@ public class Main {
         try {
             return new BufferWikiSerialization().readFromSerialized(fis.getChannel());
         } catch (IOException e) {
-            return handleError(e);
+            return reportErrorAndExit(e);
         }
     }
 
-    private static void doRun(@Nullable FileInputStream input, @Nullable File inputFile, @Nullable File outputFile, Source source, OperationMode mode) {
+    private static int doRun(@Nullable FileInputStream input, @Nullable File inputFile, @Nullable File outputFile, Source source, OperationMode mode) {
         FileOutputStream fos = null;
+        int exitValue = 0;
         if (outputFile != null) {
             if (outputFile.exists()) {
                 System.err.printf("File %s already exists. Exiting%n", outputFile);
-                System.exit(1);
+                exitValue = GENERAL_ERROR;
             }
             fos = getOutputStream(outputFile);
             if (fos == null) {
                 System.err.printf("Cannot open file %s for writing. Exiting%n", outputFile);
-                System.exit(1);
+                exitValue = GENERAL_ERROR;
             }
         }
+        if (exitValue != 0) return exitValue;
         long loadStart = System.currentTimeMillis();
         final String inputFileName = source == Source.STDIN ? "<stdin>" : inputFile.toString();
         System.out.printf("Starting to read %s%n", inputFileName);
@@ -185,23 +191,25 @@ public class Main {
             try {
                 writeTo(fos, pages);
             } catch (IOException e) {
-                System.err.printf("Encountered an error %s%n", e.getMessage());
-                System.out.printf("Finished in %d ms%n", System.currentTimeMillis() - writeStart);
-                System.exit(1);
+                System.err.println("Encountered an error:");
+                e.printStackTrace();
+                exitValue = GENERAL_ERROR;
             }
             System.out.printf("Finished in %d ms%n", System.currentTimeMillis() - writeStart);
         }
+        if (exitValue != 0) return exitValue;
         if (mode == OperationMode.INTERACTIVE) {
             try (InputStreamReader ir = new InputStreamReader(System.in); BufferedReader br = new BufferedReader(ir)){
                 doInteractive(pages, br);
             } catch (IOException e) {
-                handleError(e);
+                reportErrorAndExit(e);
             }
         } else if (mode == OperationMode.BENCHMARK) {
             Benchmarking.runBenchmarks(pages, 50);
         } else if (mode == OperationMode.WIKI_TEST) {
             Benchmarking.runBenchmarksAndTest(pages);
         }
+        return exitValue;
     }
 
     private static void doInteractive(List<BufferWikiPage> pages, BufferedReader console) throws IOException {
@@ -244,8 +252,9 @@ public class Main {
         return new long[] { largestId, linkCount, largestLinkCount, titleTotal, longestTitle };
     }
 
-    public static <T> T handleError(Throwable t) {
+    public static <T> T reportErrorAndExit(Throwable t) {
         System.err.printf("Encountered error %s. Exiting%n", t.getMessage());
+        t.printStackTrace();
         System.exit(1);
         return null;
     }

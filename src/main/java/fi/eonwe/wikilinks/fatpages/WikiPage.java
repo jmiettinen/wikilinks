@@ -16,7 +16,7 @@ public interface WikiPage {
     int getId();
 
     /**
-     * @return
+     * @return title of the page
      */
     String getTitle();
 
