@@ -14,6 +14,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <uber-jar-name>wikilinks</uber-jar-name>
         <shell-jar-path>${project.build.directory}/wikilinks</shell-jar-path>
+        <run-slow-tests>FALSE</run-slow-tests>
     </properties>
 
     <dependencies>
@@ -54,9 +55,21 @@
             <scope>runtime</scope>
         </dependency>
         <dependency>
-            <groupId>junit</groupId>
-            <artifactId>junit</artifactId>
-            <version>4.12</version>
+            <groupId>org.junit.platform</groupId>
+            <artifactId>junit-platform-launcher</artifactId>
+            <version>1.5.1</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-engine</artifactId>
+            <version>5.5.1</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.vintage</groupId>
+            <artifactId>junit-vintage-engine</artifactId>
+            <version>5.5.1</version>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -72,17 +85,17 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
-                <version>2.18.1</version>
+                <version>3.0.0-M3</version>
                 <configuration>
-                    <excludes>
-                        <exclude>**/RouteFinderTest.java</exclude>
-                    </excludes>
+                    <environmentVariables>
+                        <RUN_SLOW_TESTS>${run-slow-tests}</RUN_SLOW_TESTS>
+                    </environmentVariables>
                 </configuration>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <version>2.3.2</version>
+                <version>3.8.0</version>
                 <configuration>
                     <source>1.8</source>
                     <target>1.8</target>
@@ -93,7 +106,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-jar-plugin</artifactId>
-                <version>2.5</version>
+                <version>3.1.1</version>
                 <configuration>
                     <archive>
                         <manifest>
@@ -105,7 +118,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
-                <version>2.3</version>
+                <version>3.2.1</version>
                 <executions>
                     <execution>
                         <id>shade-jar</id>
@@ -140,7 +153,7 @@
                                 </goals>
                                 <configuration>
                                     <executable>/bin/sh</executable>
-                                    <commandlineArgs>-c 'rm ${build.directory}/${uber-jar-name} &amp;&amp; cat ${project.basedir}/src/main/resources/shell_runner.sh ${build.directory}/${uber-jar-name}.jar > ${build.directory}/${uber-jar-name} &amp;&amp; chmod 700 ${build.directory}/${uber-jar-name}'
+                                    <commandlineArgs>-c 'rm ${shell-jar-path} ; cat ${project.basedir}/src/main/resources/shell_runner.sh ${build.directory}/${uber-jar-name}.jar > ${shell-jar-path} &amp;&amp; chmod 700 ${shell-jar-path}'
                                     </commandlineArgs>
                                 </configuration>
                             </execution>
@@ -148,8 +161,15 @@
                     </plugin>
                 </plugins>
             </build>
+        </profile>
 
+        <profile>
+            <id>testAll</id>
+            <properties>
+                <run-slow-tests>TRUE</run-slow-tests>
+            </properties>
         </profile>
     </profiles>
+
 
 </project>

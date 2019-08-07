@@ -11,8 +11,9 @@ import fi.eonwe.wikilinks.leanpages.BufferWikiPage;
 import fi.eonwe.wikilinks.leanpages.BufferWikiSerialization;
 import net.openhft.koloboke.collect.map.hash.HashObjObjMap;
 import net.openhft.koloboke.collect.map.hash.HashObjObjMaps;
-import org.junit.Ignore;
-import org.junit.Test;
+import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -66,7 +67,7 @@ public class WikiLinksTest {
         }
     }
 
-    @Ignore("Rethinking redirects")
+    @Disabled("Rethinking redirects")
     @Test
     public void itResolvesRedirects() {
         Map<String, PagePointer> map = Maps.newHashMap();
@@ -81,7 +82,8 @@ public class WikiLinksTest {
         assertThat(map.get(foofooDir.getTitle()).page, is(equalTo(fooPage)));
     }
 
-    @Test(timeout = 1000L)
+    @Test
+    @Timeout(1000L)
     public void itResolvesInfiniteRedirects() {
         Map<String, PagePointer> map = Maps.newHashMap();
         WikiRedirectPage fooDir = new WikiRedirectPage("foo-redir", 0, "foo-foo-foo-redir");

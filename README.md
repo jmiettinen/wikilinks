@@ -68,3 +68,10 @@ serialization handled by `BufferWikiSerialization`. And inordinate amount of pri
 
 This is all needless work and should be by some other mechanism that offers flyweight view into a nicely packed binary
 presentation such as [Protocol buffers](https://developers.google.com/protocol-buffers/).
+
+### Tests
+
+To run all tests, enable profile `testAll` which will run tests that take seconds to run.
+```
+./mvnw test -PtestAll
+```

@@ -9,10 +9,12 @@ import java.util.stream.Collectors;
 
 import fi.eonwe.wikilinks.leanpages.BufferWikiPage;
 import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
 import static org.junit.Assert.assertTrue;
 
+@EnabledIfEnvironmentVariable(named = "RUN_SLOW_TESTS", matches = "TRUE")
 public class WikiProcessorTest {
 
     @Test

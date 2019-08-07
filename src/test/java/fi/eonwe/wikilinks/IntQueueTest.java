@@ -5,8 +5,7 @@ import java.util.Queue;
 import java.util.Random;
 
 import fi.eonwe.wikilinks.utils.IntQueue;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import static org.junit.Assert.*;
 
