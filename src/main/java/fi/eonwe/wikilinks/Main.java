@@ -140,7 +140,7 @@ public class Main {
         try (BufferedInputStream bis = new BufferedInputStream(fis)) {
             InputStream is = bis;
             if (isBzipStream) {
-                is = new BufferedInputStream(new BZip2CompressorInputStream(is));
+                is = new BufferedInputStream(new BZip2CompressorInputStream(is, true));
             }
             return WikiProcessor.readPages(is);
         } catch (IOException e) {
