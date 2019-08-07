@@ -108,6 +108,7 @@
                 <version>2.3</version>
                 <executions>
                     <execution>
+                        <id>shade-jar</id>
                         <phase>package</phase>
                         <goals>
                             <goal>shade</goal>
@@ -120,5 +121,35 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <profile>
+            <id>unix</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <artifactId>exec-maven-plugin</artifactId>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <version>1.6.0</version>
+                        <executions>
+                            <execution>
+                                <id>script-runner</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>exec</goal>
+                                </goals>
+                                <configuration>
+                                    <executable>/bin/sh</executable>
+                                    <commandlineArgs>-c 'rm ${build.directory}/${uber-jar-name} &amp;&amp; cat ${project.basedir}/src/main/resources/shell_runner.sh ${build.directory}/${uber-jar-name}.jar > ${build.directory}/${uber-jar-name} &amp;&amp; chmod 700 ${build.directory}/${uber-jar-name}'
+                                    </commandlineArgs>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+
+        </profile>
+    </profiles>
 
 </project>
