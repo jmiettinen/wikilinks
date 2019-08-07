@@ -14,7 +14,6 @@ import static org.junit.Assert.*;
  */
 public class IntQueueTest {
 
-
     private static final int SIZE = 1023;
 
     private IntQueue queue;

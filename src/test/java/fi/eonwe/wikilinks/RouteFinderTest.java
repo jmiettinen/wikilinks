@@ -13,6 +13,7 @@ import org.jgrapht.VertexFactory;
 import org.jgrapht.alg.DijkstraShortestPath;
 import org.jgrapht.generate.RandomGraphGenerator;
 import org.jgrapht.graph.SimpleDirectedGraph;
+import org.junit.Ignore;
 import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 
@@ -54,9 +55,8 @@ public class RouteFinderTest {
         }
     }
 
-
     @Test
-//    @Ignore("Too slow")
+    @Ignore("Too slow")
     public void findsTheSameSizedRoutes() {
         final Random rng = new Random(0xcafebabe);
         final int vertexCount = 1000;

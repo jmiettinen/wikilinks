@@ -27,6 +27,10 @@ import java.util.Map;
  */
 public class WikiProcessor {
 
+    private WikiProcessor() {
+
+    }
+
     public static List<BufferWikiPage> readPages(InputStream input) {
         WikiProcessor processor = new WikiProcessor();
         HashObjObjMap<String, PagePointer> pages = processor.preProcess(input);

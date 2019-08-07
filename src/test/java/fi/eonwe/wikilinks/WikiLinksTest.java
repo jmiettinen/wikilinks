@@ -40,7 +40,7 @@ public class WikiLinksTest {
         private final ByteArrayOutputStream bos = new ByteArrayOutputStream();
 
         @Override
-        public int write(ByteBuffer src) throws IOException {
+        public int write(ByteBuffer src) {
             ByteBuffer buffer = src.duplicate();
             byte[] tmp = new byte[4096];
             int written = 0;
@@ -206,20 +206,24 @@ public class WikiLinksTest {
         final String prefix = "foo_title_";
         List<BufferWikiPage> readFromXml = WikiProcessor.packPages(convert(createSimpleDenseGraph(512, prefix)));
         BufferWikiSerialization serializer = new BufferWikiSerialization();
-        FileOutputStream fos = new FileOutputStream(tmpFile);
-        serializer.serialize(readFromXml, fos.getChannel());
-        fos.close();
-        FileInputStream fin = new FileInputStream(tmpFile);
-        FileChannel fc = fin.getChannel();
-        List<BufferWikiPage> readFromFile = serializer.readFromSerialized(fc);
+        try (FileOutputStream fos = new FileOutputStream(tmpFile);
+             FileChannel fc = fos.getChannel()) {
+            serializer.serialize(readFromXml, fc);
+        }
+        try (
+            FileInputStream fin = new FileInputStream(tmpFile);
+            FileChannel fc = fin.getChannel())
+        {
+            List<BufferWikiPage> readFromFile = serializer.readFromSerialized(fc);
 
-        assertThat(readFromFile.size(), is(readFromXml.size()));
-        for (int i = 0; i < readFromXml.size(); i++) {
-            BufferWikiPage fromXml = readFromXml.get(i);
-            BufferWikiPage deserialized = readFromFile.get(i);
-            assertThat(deserialized.getTitle(), is(equalTo(fromXml.getTitle())));
-            assertThat(deserialized.getTitle(), startsWith(prefix));
-            assertThat(deserialized, is(equalTo(fromXml)));
+            assertThat(readFromFile.size(), is(readFromXml.size()));
+            for (int i = 0; i < readFromXml.size(); i++) {
+                BufferWikiPage fromXml = readFromXml.get(i);
+                BufferWikiPage deserialized = readFromFile.get(i);
+                assertThat(deserialized.getTitle(), is(equalTo(fromXml.getTitle())));
+                assertThat(deserialized.getTitle(), startsWith(prefix));
+                assertThat(deserialized, is(equalTo(fromXml)));
+            }
         }
     }
 
