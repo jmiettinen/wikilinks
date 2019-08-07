@@ -25,6 +25,8 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 
+import javax.annotation.Nullable;
+
 /**
  * Hello world!
  */
@@ -113,6 +115,7 @@ public class Main {
         doRun(inputStream, inputFile, outputFile, source, mode);
     }
 
+    @Nullable
     private static FileInputStream getInputStream(File file) {
         try {
             return new FileInputStream(file);
@@ -121,6 +124,7 @@ public class Main {
         }
     }
 
+    @Nullable
     private static FileOutputStream getOutputStream(File file) {
         try {
             return new FileOutputStream(file);
@@ -149,7 +153,7 @@ public class Main {
         }
     }
 
-    private static void doRun(FileInputStream input, File inputFile, File outputFile, Source source, OperationMode mode) {
+    private static void doRun(@Nullable FileInputStream input, @Nullable File inputFile, @Nullable File outputFile, Source source, OperationMode mode) {
         FileOutputStream fos = null;
         if (outputFile != null) {
             if (outputFile.exists()) {
@@ -226,7 +230,7 @@ public class Main {
         long titleTotal = 0;
         long longestTitle = -1;
         long largestLinkCount = -1;
-        for (LeanWikiPage page : pages) {
+        for (LeanWikiPage<?> page : pages) {
             long pageId = page.getId();
             if (pageId > largestId) {
                 largestId = pageId;

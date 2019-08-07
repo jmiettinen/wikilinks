@@ -18,6 +18,7 @@ import org.xml.sax.SAXException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
@@ -41,7 +42,7 @@ public class WikiProcessor {
         try {
             WikiXMLParser parser = new WikiXMLParser(input, new IArticleFilter() {
                 @Override
-                public void process(WikiArticle article, Siteinfo siteinfo) throws SAXException {
+                public void process(WikiArticle article, Siteinfo siteinfo) {
                     if (article.isMain()) {
                         String text = article.getText();
                         if (text == null) text = "";
@@ -101,46 +102,25 @@ public class WikiProcessor {
 
     private static boolean endSomewhere(PagePointer redirect, HashObjObjMap<String, PagePointer> map, IdentityHashMap<WikiPage, Boolean> visited) {
         WikiPage immediateTarget = redirect.page;
-        if (immediateTarget == null || !(immediateTarget instanceof WikiRedirectPage)) return true;
-        if (visited == null) {
-            visited = new IdentityHashMap<>();
-        }
-        if (visited.containsKey(immediateTarget)) {
-            return false;
+        if (immediateTarget instanceof WikiRedirectPage) {
+            if (visited == null) {
+                visited = new IdentityHashMap<>();
+            }
+            if (visited.containsKey(immediateTarget)) {
+                return false;
+            } else {
+                visited.put(immediateTarget, Boolean.TRUE);
+            }
+            WikiRedirectPage redirectPage = (WikiRedirectPage) immediateTarget;
+            PagePointer redirectPointer = map.get(redirectPage.getTarget());
+            if (redirectPointer == null) {
+                return false;
+            } else {
+                return endSomewhere(redirectPointer, map, visited);
+            }
         } else {
-            visited.put(immediateTarget, Boolean.TRUE);
+            return true;
         }
-        WikiRedirectPage redirectPage = (WikiRedirectPage) immediateTarget;
-        PagePointer redirectPointer = map.get(redirectPage.getTarget());
-        if (redirectPointer == null) {
-            return false;
-        } else {
-            return endSomewhere(redirectPointer, map, visited);
-        }
-    }
-
-    private static WikiPage resolveUltimateTarget(PagePointer redirect, HashObjObjMap<String, PagePointer> map, IdentityHashMap<WikiPage, Boolean> visited) {
-        WikiPage immediateTarget = redirect.page;
-        if (immediateTarget == null || !(immediateTarget instanceof WikiRedirectPage)) return immediateTarget;
-        if (visited == null) {
-            visited = new IdentityHashMap<>();
-        }
-        if (visited.containsKey(immediateTarget)) {
-            // We've already been here, thus we have a cycle.
-            return null;
-        } else {
-            visited.put(immediateTarget, Boolean.TRUE);
-        }
-        WikiRedirectPage redirectPage = (WikiRedirectPage) immediateTarget;
-        PagePointer redirectPointer = map.get(redirectPage.getTarget());
-        WikiPage ultimateTarget;
-        if (redirectPointer == null) {
-            ultimateTarget = null;
-        } else {
-            ultimateTarget = resolveUltimateTarget(redirectPointer, map, visited);
-            redirectPointer.page = ultimateTarget;
-        }
-        return ultimateTarget;
     }
 
     public static void printStatistics(Map<String, PagePointer> map) {
@@ -209,7 +189,7 @@ public class WikiProcessor {
                 list.add(packedPage);
             }
         });
-        list.sort((a,b) -> Long.compare(a.getId(), b.getId()));
+        list.sort(Comparator.comparingLong(BufferWikiPage::getId));
         return list;
     }
 }

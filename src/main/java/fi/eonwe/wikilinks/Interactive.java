@@ -5,6 +5,8 @@ import java.io.IOException;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import javax.annotation.Nullable;
+
 import fi.eonwe.wikilinks.utils.Helpers;
 
 import static fi.eonwe.wikilinks.utils.Helpers.quote;
@@ -13,6 +15,7 @@ import static fi.eonwe.wikilinks.utils.Helpers.quote;
  */
 public class Interactive {
 
+    @Nullable
     private static String findTarget(WikiRoutes routes, BufferedReader reader, boolean startPoint) throws IOException {
         final String wildcard = "#";
         final String randomPage = "<";

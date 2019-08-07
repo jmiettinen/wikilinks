@@ -21,7 +21,15 @@ public interface LeanWikiPage<T extends LeanWikiPage<T>> extends Comparable<T> {
         return compareTitle(other);
     }
 
+    /**
+     * @return a read-only view to the buffer that this offers a flyweight view into as an object.
+     */
     ByteBuffer getBuffer();
+
+    /**
+     *
+     * @return the amount of bytes this object uses from the underlying buffer.
+     */
     int size();
 
 }

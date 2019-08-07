@@ -1,15 +1,18 @@
 package fi.eonwe.wikilinks.fatpages;
 
+import javax.annotation.Nullable;
+
 /**
 */
 public class PagePointer {
 
     private static int counter = 0;
 
+    @Nullable
     public WikiPage page;
     public final int id = counter++;
 
-    public PagePointer(WikiPage page) {
+    public PagePointer(@Nullable WikiPage page) {
         this.page = page;
     }
 

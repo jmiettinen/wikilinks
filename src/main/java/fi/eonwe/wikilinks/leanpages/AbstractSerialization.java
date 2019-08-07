@@ -1,8 +1,5 @@
 package fi.eonwe.wikilinks.leanpages;
 
-import com.google.common.cache.Cache;
-import com.google.common.cache.CacheBuilder;
-import com.google.common.cache.LoadingCache;
 import com.google.common.collect.Lists;
 import com.google.common.primitives.Ints;
 
@@ -17,7 +14,6 @@ import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
-import java.util.WeakHashMap;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 
@@ -25,9 +21,9 @@ import java.util.stream.Stream;
  */
 public abstract class AbstractSerialization<T extends LeanWikiPage<T>> {
 
-    private final TypeCreator<T> creator;
+    private final PageCreator<T> creator;
 
-    protected AbstractSerialization(TypeCreator<T> creator) {
+    protected AbstractSerialization(PageCreator<T> creator) {
         this.creator = creator;
     }
 

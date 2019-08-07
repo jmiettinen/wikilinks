@@ -4,7 +4,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
-import java.util.function.IntConsumer;
 import java.util.stream.Stream;
 
 import com.google.common.collect.Maps;
@@ -14,7 +13,6 @@ import org.jgrapht.VertexFactory;
 import org.jgrapht.alg.DijkstraShortestPath;
 import org.jgrapht.generate.RandomGraphGenerator;
 import org.jgrapht.graph.SimpleDirectedGraph;
-import org.junit.Ignore;
 import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 
@@ -58,7 +56,7 @@ public class RouteFinderTest {
 
 
     @Test
-    @Ignore("Too slow")
+//    @Ignore("Too slow")
     public void findsTheSameSizedRoutes() {
         final Random rng = new Random(0xcafebabe);
         final int vertexCount = 1000;
@@ -89,12 +87,11 @@ public class RouteFinderTest {
                 long myTime = System.currentTimeMillis() - myStart;
 //                System.out.printf("%d vertices, %d edges: JGraphT=%d ms, RouteFinder=%d ms%n", vertexCount, (long) edgeCount * vertexCount, jgraphtTime, myTime);
                 assertEquals(route.length, myRoute.length);
-//                assertArrayEquals(route, myRoute);
             }
         }
     }
 
-    private int[] toIntArray(List<IntEdge> path) {
+    private static int[] toIntArray(List<IntEdge> path) {
         if (path.isEmpty()) return new int[0];
         int[] startPoints = Stream.concat(path.stream().map(intEdge -> intEdge.start), Stream.of(path.get(path.size() - 1).end)).mapToInt(Number::intValue).toArray();
         return startPoints;
