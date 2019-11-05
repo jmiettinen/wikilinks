@@ -4,9 +4,21 @@
 
 Wikilinks is a command-line tool to find shortest paths between two articles in Wikipedia.
 
+It was supposed to be a web service with a frontend, but so far I've been more interested in optimizing
+path finding than developing a useful service.
+
 In order to do that, it chews in wikimedia XML dumps, spits out a more condensed version of the article graph and uses
 that to do the queries. This transforms ~100 GB uncompressed English wikipedia to ~900 MB of titles and links which
-can then read quickly and queried. 
+can then read quickly and queried.
+
+You can use also Wikipedias in other languages than English. They're quicker to get started with
+too.
+
+Wiki dumps are listed [here](https://dumps.wikimedia.org/backup-index.html) and for path finding to function properly,
+you'll need to fetch all the pages.
+
+For example, for Breton language, you might go to [it's dump page](https://dumps.wikimedia.org/brwiki/20191101/)
+and there select ["All pages, current versions only"](https://dumps.wikimedia.org/brwiki/20191101/brwiki-20191101-pages-meta-current.xml.bz2).
 
 ## Usage
 
@@ -75,3 +87,13 @@ To run all tests, enable profile `testAll` which will run tests that take second
 ```
 ./mvnw test -PtestAll
 ```
+
+## TODO
+
+Things to improve, clean up, etc
+
+- [ ] Replace own serialization format with Protobuf or similar
+- [ ] Drop nowadays unused hierarchies of `LeanWikiPage` and `WikiPage` 
+- [ ] Rewrite command line option handling with argparse4j or Kotlin-argparser
+- [ ] Move Wikipedia XML -> serialization format to another main
+- [ ] Write web interface for querying routes and available articles
