@@ -1,4 +1,5 @@
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+load(":junit5.bzl", "junit_jupiter_java_repositories", "junit_platform_java_repositories")
 
 RULES_JVM_EXTERNAL_TAG = "2.8"
 RULES_JVM_EXTERNAL_SHA = "79c9850690d7614ecdb72d68394f994fef7534b292c4867ce5e7dec0aa7bdfad"
@@ -15,6 +16,14 @@ load("@rules_jvm_external//:defs.bzl", "maven_install")
 JUNIT_JUPITER_VERSION = "5.5.2"
 JUNIT_PLATFORM_VERSION = "1.5.2"
 KOLOBOKE_VERSION = "0.6.8"
+
+junit_jupiter_java_repositories(
+    version = JUNIT_JUPITER_VERSION,
+)
+
+junit_platform_java_repositories(
+    version = JUNIT_PLATFORM_VERSION,
+)
 
 maven_install(
     artifacts = [
@@ -44,3 +53,4 @@ maven_install(
 
 load("@maven//:defs.bzl", "pinned_maven_install")
 pinned_maven_install()
+
