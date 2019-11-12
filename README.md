@@ -20,12 +20,15 @@ you'll need to fetch all the pages.
 For example, for Breton language, you might go to [it's dump page](https://dumps.wikimedia.org/brwiki/20191101/)
 and there select ["All pages, current versions only"](https://dumps.wikimedia.org/brwiki/20191101/brwiki-20191101-pages-meta-current.xml.bz2).
 
-## Usage
+## Building
 
 To start you'll need to have Java 11, a Wikipedia dump and a Internet connection.
-On Windows you'll also need to have Bazel 1.1.0 installed.
+On Windows you'll also need to have Bazel 1.1.0 installed or use [Bazelisk](https://github.com/bazelbuild/bazelisk) to
+install correct Bazel on-demand.
 
-Start by compiling and packaging everything into one uber-jar
+For MacOS/Linux (64-bit), there's `bazelw` wrapper and Bazelisk ınstallaton in the repository.
+
+Start by compiling and packaging everything
 ```
 ./bazelw build //:wikilinks
 ```
@@ -34,10 +37,20 @@ Or on Windows,
 bazel build //:wikilinks
 ```
 
+### A self-contained jar
 
-Then to convert `mywikidumnp.xml.bz2` to a more compressed format `my_wiki.dump`, run
+To build a self-contained JAR-file (uber-jar), use
 ```
-bazel-bin/wikilinks -x mywikidumnp.xml.bz2 -o my_wiki.dump
+./bazelw build //:wikilinks_deploy.jar
+```
+
+## Usage
+
+After you've compiled the code, we'll start by reading Wikimedia XML files and converting them to a more compact format.
+
+To convert `mywikidumnp.xml.bz2` to a more compact format `my_wiki.dump`, run
+```
+bazel-bin/wikilinks -x mywikidump.xml.bz2 -o my_wiki.dump
 ```
 
 This will take quite a bit of time, around one to two hours for English Wikipedia.
@@ -63,6 +76,8 @@ Route: "Foobar" -> "World War II" -> "Central Powers" -> "Finland" (in 29 ms)
 ```
 
 Inputting `<` to the prompt will give you a random page.
+
+###
 
 ## Development
 
