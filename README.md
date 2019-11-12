@@ -22,28 +22,29 @@ and there select ["All pages, current versions only"](https://dumps.wikimedia.or
 
 ## Usage
 
-To start you'll need to have Java 11, a Wikipedia dump and a Internet connection
+To start you'll need to have Java 11, a Wikipedia dump and a Internet connection.
+On Windows you'll also need to have Bazel 1.1.0 installed.
 
 Start by compiling and packaging everything into one uber-jar
 ```
-./mwnv package
+./bazelw build //:wikilinks
 ```
-Or on Windows,
+Or on Windows, 
 ```
-mvnw package
+bazel build //:wikilinks
 ```
 
 
 Then to convert `mywikidumnp.xml.bz2` to a more compressed format `my_wiki.dump`, run
 ```
-java -jar -x mywikidumnp.xml.bz2 -o my_wiki.dump
+bazel-bin/wikilinks -x mywikidumnp.xml.bz2 -o my_wiki.dump
 ```
 
 This will take quite a bit of time, around one to two hours for English Wikipedia.
 
 After you're done with that, you can run 
 ```
-java -jar target/wikilinks.jar -s en_wiki.serialized -i
+bazel-bin/wikilinks -s en_wiki.serialized -i
 ```
 to start the interactive querying.
 
@@ -63,12 +64,6 @@ Route: "Foobar" -> "World War II" -> "Central Powers" -> "Finland" (in 29 ms)
 
 Inputting `<` to the prompt will give you a random page.
 
-### Unix
-
-On Unixy operating systems, you can supply profile unix to Maven with `./mvnw package -Punix`.
-
-After this, you can replace `java -jar target/wikilinks.jar` with `target/wikilinks`.
-
 ## Development
 
 Wikilinks was originally developed to be run as a web service. This added some constraints to memory and cpu usage: CPU
@@ -83,10 +78,16 @@ presentation such as [Protocol buffers](https://developers.google.com/protocol-b
 
 ### Tests
 
-To run all tests, enable profile `testAll` which will run tests that take seconds to run.
+To run all tests, environment variable `RUN_SLOW_TESTS` needs to be set to `TRUE` to run all tests.
+This will take seconds to run.
 ```
-./mvnw test -PtestAll
+RUN_SLOW_TESTS=TRUE ./bazelw run //:all_tests
 ```
+If you drop the environment variable
+```
+./bazelw run //:all_tests
+```
+Slow tests will be skipped and tests run in a second or so.
 
 ## TODO
 
@@ -97,5 +98,5 @@ Things to improve, clean up, etc
 - [ ] Rewrite command line option handling with argparse4j or Kotlin-argparser
 - [ ] Move Wikipedia XML -> serialization format to another main
 - [ ] Write web interface for querying routes and available articles
-- [ ] Port to Bazel or similar build system
+- [X] Port to Bazel or similar build system
 
