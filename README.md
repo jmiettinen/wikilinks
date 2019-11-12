@@ -97,3 +97,5 @@ Things to improve, clean up, etc
 - [ ] Rewrite command line option handling with argparse4j or Kotlin-argparser
 - [ ] Move Wikipedia XML -> serialization format to another main
 - [ ] Write web interface for querying routes and available articles
+- [ ] Port to Bazel or similar build system
+
