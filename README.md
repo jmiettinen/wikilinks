@@ -96,11 +96,11 @@ presentation such as [Protocol buffers](https://developers.google.com/protocol-b
 To run all tests, environment variable `RUN_SLOW_TESTS` needs to be set to `TRUE` to run all tests.
 This will take seconds to run.
 ```
-RUN_SLOW_TESTS=TRUE ./bazelw run //:all_tests
+RUN_SLOW_TESTS=TRUE ./bazelw run //src/test:all_tests
 ```
 If you drop the environment variable
 ```
-./bazelw run //:all_tests
+./bazelw run //src/test:all_tests
 ```
 Slow tests will be skipped and tests run in a second or so.
 
