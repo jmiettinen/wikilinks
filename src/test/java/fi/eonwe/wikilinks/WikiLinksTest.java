@@ -30,8 +30,10 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
 
-import static org.hamcrest.CoreMatchers.*;
-import static org.hamcrest.MatcherAssert.*;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.startsWith;
 
 public class WikiLinksTest {
 
@@ -109,7 +111,7 @@ public class WikiLinksTest {
     }
 
     @Test
-    public void itPacksPagesCorrectly() throws Exception {
+    public void itPacksPagesCorrectly() {
         Map<String, PagePointer> map = createSimpleDenseGraph(4, "title_");
         assertThat(map.size(), is(equalTo(4)));
         List<BufferWikiPage> packedWikiPages = WikiProcessor.packPages(convert(map));

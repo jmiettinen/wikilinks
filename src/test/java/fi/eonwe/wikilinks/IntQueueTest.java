@@ -5,9 +5,11 @@ import java.util.Queue;
 import java.util.Random;
 
 import fi.eonwe.wikilinks.utils.IntQueue;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  */
@@ -28,7 +30,7 @@ public class IntQueueTest {
 
         }
         boolean success = queue.addLast(SIZE);
-        assertFalse(success);
+        Assertions.assertFalse(success);
         assertEquals(SIZE, queue.size());
     }
 
@@ -79,7 +81,7 @@ public class IntQueueTest {
                     int removed = queue.removeFirst();
                     int removedJdk = jdkQueue.remove();
                     assertEquals(removedJdk, removed);
-                    assertEquals("Sizes differ", jdkQueue.size(), queue.size());
+                    assertEquals(jdkQueue.size(), queue.size(), "Sizes differ");
                     noop = false;
                 }
                 assertTrue(queue.isEmpty());

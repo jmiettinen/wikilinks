@@ -12,7 +12,7 @@ import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @EnabledIfEnvironmentVariable(named = "RUN_SLOW_TESTS", matches = "TRUE")
 public class WikiProcessorTest {
@@ -25,7 +25,7 @@ public class WikiProcessorTest {
             Set<String> pageNames = pages.stream().map(BufferWikiPage::getTitle).collect(Collectors.toSet());
             for (String pageToExist : Arrays.asList("Gůrny Ślůnsk", "Gdańsk", "Legwan", "Wikipedyjo")) {
                 boolean exists = pageNames.contains(pageToExist);
-                assertTrue(String.format("'%s' does not exist", pageToExist), exists);
+                assertTrue(exists, String.format("'%s' does not exist", pageToExist));
             }
 
         }
