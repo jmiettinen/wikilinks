@@ -1,7 +1,6 @@
 package fi.eonwe.wikilinks
 
 import com.google.common.collect.Lists
-import com.google.common.collect.Maps
 import fi.eonwe.wikilinks.fatpages.PagePointer
 import fi.eonwe.wikilinks.fatpages.WikiPageData
 import fi.eonwe.wikilinks.fatpages.WikiRedirectPage
@@ -60,12 +59,13 @@ class WikiLinksTest {
     @Disabled("Rethinking redirects")
     @Test
     fun itResolvesRedirects() {
-        val map: MutableMap<String?, PagePointer?> = Maps.newHashMap()
         val fooDir = WikiRedirectPage("foo-redir", 0, "foo")
         val foofooDir = WikiRedirectPage("foo-foo-redir", 1, "foo-redir")
         val fooPage = WikiPageData("foo", 2, arrayOfNulls<PagePointer>(0))
-        for (page in arrayOf(fooDir, foofooDir, fooPage)) {
-            map.put(page.getTitle(), PagePointer(page))
+        val map = buildMap {
+            for (page in listOf(fooDir, foofooDir, fooPage)) {
+                this.put(page.getTitle(), PagePointer(page))
+            }
         }
         WikiProcessor.dropRedirectLoops(convert(map))
 
@@ -77,13 +77,14 @@ class WikiLinksTest {
     @Test
     @Timeout(1000L)
     fun itResolvesInfiniteRedirects() {
-        val map: MutableMap<String?, PagePointer?> = Maps.newHashMap()
         val fooDir = WikiRedirectPage("foo-redir", 0, "foo-foo-foo-redir")
         val foofooDir = WikiRedirectPage("foo-foo-redir", 1, "foo-redir")
         val foofoofooDir = WikiRedirectPage("foo-foo-foo-redir", 2, "foo-redir")
         val fooPage = WikiPageData("foo", 3, arrayOfNulls<PagePointer>(0))
-        for (page in arrayOf(fooDir, foofooDir, foofoofooDir, fooPage)) {
-            map.put(page.getTitle(), PagePointer(page))
+        val map = buildMap {
+            listOf(fooDir, foofooDir, foofoofooDir, fooPage).forEach { page ->
+                put(page.getTitle(), PagePointer(page))
+            }
         }
         WikiProcessor.dropRedirectLoops(convert(map))
         val tmp = listOf(fooDir, foofooDir, foofoofooDir).fold(0) { acc, p ->
@@ -191,20 +192,20 @@ class WikiLinksTest {
     }
 
     companion object {
-        private fun convert(map: MutableMap<String?, PagePointer?>): HashObjObjMap<String?, PagePointer?> {
-            return HashObjObjMaps.newImmutableMap<String?, PagePointer?>(map)
+        private fun convert(map: Map<String, PagePointer>): HashObjObjMap<String, PagePointer> {
+            return HashObjObjMaps.newImmutableMap(map)
         }
 
         private fun createSimpleDenseGraph(
             size: Int,
             titlePrefix: String,
             duplicates: Boolean = false
-        ): HashObjObjMap<String?, PagePointer?> {
+        ): HashObjObjMap<String, PagePointer> {
             val pointers = arrayOfNulls<PagePointer>(size)
             for (i in pointers.indices) {
                 pointers[i] = PagePointer(null)
             }
-            val map = HashObjObjMaps.newMutableMap<String?, PagePointer?>()
+            val map = HashObjObjMaps.newMutableMap<String, PagePointer>()
             for (i in pointers.indices) {
                 val pagePointers: MutableList<PagePointer?> = Lists.newArrayList()
                 for (repeat in 0..<(if (duplicates) 2 else 1)) {

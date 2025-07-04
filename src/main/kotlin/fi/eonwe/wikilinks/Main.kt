@@ -130,25 +130,26 @@ object Main {
         }
     }
 
-    private fun readXml(fis: FileInputStream, isBzipStream: Boolean): MutableList<BufferWikiPage?> {
+    private fun readXml(fis: FileInputStream, isBzipStream: Boolean): MutableList<BufferWikiPage> {
         try {
             BufferedInputStream(fis).use { bis ->
-                var `is`: InputStream = bis
-                if (isBzipStream) {
-                    `is` = BufferedInputStream(BZip2CompressorInputStream(`is`, true))
+                val inputStream = if (isBzipStream) {
+                    BufferedInputStream(BZip2CompressorInputStream(bis, true))
+                } else {
+                    bis
                 }
-                return WikiProcessor.readPages(`is`)
+                return WikiProcessor.readPages(inputStream)
             }
         } catch (e: IOException) {
-            return reportErrorAndExit<MutableList<BufferWikiPage?>>(e)!!
+            reportErrorAndExit(e)
         }
     }
 
-    private fun readFromSerialized(fis: FileInputStream): MutableList<BufferWikiPage?> {
+    private fun readFromSerialized(fis: FileInputStream): MutableList<BufferWikiPage> {
         try {
             return BufferWikiSerialization().readFromSerialized(fis.getChannel())
         } catch (e: IOException) {
-            return reportErrorAndExit<MutableList<BufferWikiPage?>>(e)!!
+            reportErrorAndExit(e)
         }
     }
 
@@ -176,15 +177,18 @@ object Main {
         val loadStart = System.currentTimeMillis()
         val inputFileName: String? = if (source == Source.STDIN) "<stdin>" else inputFile.toString()
         System.out.printf("Starting to read %s%n", inputFileName)
-        val pages: MutableList<BufferWikiPage?>
-        if (source == Source.XML) {
-            pages = readXml(input!!, inputFile!!.getName().endsWith(".bz2"))
-            Collections.sort<BufferWikiPage?>(pages)
+        val pages = if (source == Source.XML) {
+            readXml(input!!, inputFile!!.getName().endsWith(".bz2"))
+                .also {
+                    it.sort()
+                }
         } else if (source == Source.SERIALIZED) {
-            pages = readFromSerialized(input!!)
+            readFromSerialized(input!!)
         } else {
-            pages = WikiProcessor.readPages(System.`in`)
-            Collections.sort<BufferWikiPage?>(pages)
+            WikiProcessor.readPages(System.`in`)
+                .also {
+                    it.sort()
+                }
         }
         System.out.printf("Read %s in %d ms%n", inputFileName, System.currentTimeMillis() - loadStart)
         if (fos != null) {
@@ -208,7 +212,7 @@ object Main {
                     }
                 }
             } catch (e: IOException) {
-                reportErrorAndExit<Any?>(e)
+                reportErrorAndExit(e)
             }
         } else if (mode == OperationMode.BENCHMARK) {
             Benchmarking.runBenchmarks(pages, 50)
@@ -219,7 +223,7 @@ object Main {
     }
 
     @Throws(IOException::class)
-    private fun doInteractive(pages: MutableList<BufferWikiPage?>?, console: BufferedReader?) {
+    private fun doInteractive(pages: MutableList<BufferWikiPage>?, console: BufferedReader?) {
         println("Starting interactive mode")
 
         val initStart = System.currentTimeMillis()
@@ -259,15 +263,14 @@ object Main {
         return longArrayOf(largestId, linkCount, largestLinkCount, titleTotal, longestTitle)
     }
 
-    fun <T> reportErrorAndExit(t: Throwable): T? {
+    fun reportErrorAndExit(t: Throwable): Nothing {
         System.err.printf("Encountered error %s. Exiting%n", t.message)
         t.printStackTrace()
-        System.exit(1)
-        return null
+        exitProcess(1)
     }
 
     @Throws(IOException::class)
-    private fun writeTo(fos: FileOutputStream, pages: MutableList<BufferWikiPage?>) {
+    private fun writeTo(fos: FileOutputStream, pages: MutableList<BufferWikiPage>) {
         if (!pages.isEmpty()) {
             val serializer = BufferWikiSerialization()
             serializer.serialize(pages, fos.getChannel())
