@@ -1,6 +1,5 @@
 package fi.eonwe.wikilinks
 
-import com.google.common.collect.Maps
 import fi.eonwe.wikilinks.leanpages.OrderedPage
 import io.kotest.matchers.shouldBe
 import org.jgrapht.EdgeFactory
@@ -30,9 +29,6 @@ class RouteFinderTest {
             return vertexCount++
         }
 
-        fun reset() {
-            vertexCount = 0
-        }
     }
 
     private class EF : EdgeFactory<Int, IntEdge> {
@@ -54,7 +50,7 @@ class RouteFinderTest {
             val graph = SimpleDirectedGraph(EF())
             val resultMap = mutableMapOf<String?, Int?>()
             generator.generateGraph(graph, VF(), resultMap)
-            val orderedPageMap: MutableMap<Int?, OrderedPage?> = createFromGraph(graph)
+            val orderedPageMap: MutableMap<Int, OrderedPage> = createFromGraph(graph)
             val vertices = graph.vertexSet()
             for (j in 0..<innerRepeats) {
                 var startVertex: Int
@@ -65,7 +61,7 @@ class RouteFinderTest {
                 } while (startVertex == endVertex)
                 val dijkstraStart = System.currentTimeMillis()
                 val dijkstra: DijkstraShortestPath<Int?, IntEdge?> =
-                    DijkstraShortestPath<Int?, IntEdge?>(graph, startVertex, endVertex)
+                    DijkstraShortestPath(graph, startVertex, endVertex)
                 val route: IntArray = toIntArray(dijkstra.getPathEdgeList().mapNotNull { it })
                 val jgraphtTime = System.currentTimeMillis() - dijkstraStart
 
@@ -91,12 +87,16 @@ class RouteFinderTest {
             return startPoints
         }
 
-        private fun fromMap(map: MutableMap<Int?, OrderedPage?>): WikiRoutes.PageMapper {
-            return WikiRoutes.PageMapper { pageIndex: Int, c: IntConsumer? -> map.get(pageIndex)!!.forEachLinkIndex(c) }
+        private fun fromMap(map: MutableMap<Int, OrderedPage>): WikiRoutes.PageMapper {
+            return object : WikiRoutes.PageMapper {
+                override fun forEachLinkIndex(pageIndex: Int, c: IntConsumer) {
+                    return map[pageIndex]!!.forEachLinkIndex(c)
+                }
+            }
         }
 
-        private fun createFromGraph(graph: SimpleDirectedGraph<Int, IntEdge>): MutableMap<Int?, OrderedPage?> {
-            val result: MutableMap<Int?, OrderedPage?> = Maps.newHashMap()
+        private fun createFromGraph(graph: SimpleDirectedGraph<Int, IntEdge>): MutableMap<Int, OrderedPage> {
+            val result: MutableMap<Int, OrderedPage> = mutableMapOf()
             for (vertex in graph.vertexSet()) {
                 val out = graph.outgoingEdgesOf(vertex)
                 val targets = out.stream().mapToInt { e: IntEdge? -> e!!.end }.toArray()

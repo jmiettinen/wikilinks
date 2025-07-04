@@ -1,6 +1,5 @@
 package fi.eonwe.wikilinks.leanpages;
 
-import com.google.common.base.Charsets;
 import com.google.common.primitives.Ints;
 import com.google.common.primitives.Shorts;
 import com.google.common.primitives.UnsignedBytes;
