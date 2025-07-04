@@ -1,8 +1,5 @@
 package fi.eonwe.wikilinks
 
-import com.google.common.base.Joiner
-import com.google.common.collect.Lists
-import com.google.common.primitives.Ints
 import fi.eonwe.wikilinks.leanpages.BufferWikiPage
 import fi.eonwe.wikilinks.leanpages.LeanWikiPage
 import fi.eonwe.wikilinks.utils.Functions.IntIntIntIntProcedure
@@ -12,21 +9,18 @@ import net.openhft.koloboke.collect.map.IntIntMap
 import net.openhft.koloboke.collect.map.hash.HashIntIntMap
 import net.openhft.koloboke.collect.map.hash.HashIntIntMaps
 import net.openhft.koloboke.function.IntIntConsumer
-import java.util.Arrays
-import java.util.Collections
 import java.util.concurrent.ThreadLocalRandom
-import java.util.concurrent.TimeUnit
 import java.util.function.Consumer
 import java.util.function.IntConsumer
-import java.util.function.IntFunction
 import java.util.function.Supplier
 import java.util.logging.Level
 import java.util.logging.Logger
-import java.util.stream.Collectors
+import kotlin.time.Duration
+import kotlin.time.measureTimedValue
 
 /**
  */
-class WikiRoutes(pages: MutableList<BufferWikiPage>) {
+class WikiRoutes(pages: List<BufferWikiPage>) {
     private val pagesByTitle: List<BufferWikiPage>
     private val pagesById: List<BufferWikiPage>
     private val mapper: LeanPageMapper
@@ -35,55 +29,56 @@ class WikiRoutes(pages: MutableList<BufferWikiPage>) {
     init {
         val pagesByTitle = pages.toMutableList()
         val pagesById = pages.toMutableList()
-        this.mapper = LeanPageMapper.Companion.convert(pages)
-        this.reverseMapper = this.mapper.reverse()
         sortIfNeeded(pagesById, "by id", byId())
         sortIfNeeded(
             pagesByTitle,
             "by title",
             Comparator { obj: BufferWikiPage, that: BufferWikiPage -> obj.compareTitle(that) })
+        this.mapper = LeanPageMapper.Companion.convert(pages)
+        this.reverseMapper = this.mapper.reverse()
         this.pagesById = pagesById
         this.pagesByTitle = pagesByTitle
     }
 
     @Throws(BadRouteException::class)
-    fun findRoute(startPage: String?, endPage: String?): Result {
+    fun findRoute(startPage: String, endPage: String): Result {
         val startPageObj = getPage(startPage)
         val endPageObj = getPage(endPage)
         if (startPageObj == null || endPageObj == null) {
-            throw BadRouteException(startPage == null, endPage == null, startPage, endPage)
+            throw BadRouteException(startPageObj == null, endPageObj == null, startPage, endPage)
         }
         return findRoute(startPageObj, endPageObj)
     }
 
     val randomPage: String?
         get() {
-            val rng = ThreadLocalRandom.current()
             if (pagesByTitle.isEmpty()) {
                 return null
             } else {
+                val rng = ThreadLocalRandom.current()
                 val i = rng.nextInt(pagesByTitle.size)
-                return pagesByTitle.get(i).getTitle()
+                return pagesByTitle[i].getTitle()
             }
         }
 
     private fun findRoute(startPage: BufferWikiPage, endPage: BufferWikiPage): Result {
-        val startTime = System.nanoTime()
-        val routeIds = RouteFinder.find(startPage.getId(), endPage.getId(), mapper, reverseMapper)
-        val path = routeIds.map { id ->
-            val index = findPageIndex(pagesById, id)
-            pagesById[index]
+        val (path, duration) = measureTimedValue {
+            val routeIds = RouteFinder.find(startPage.getId(), endPage.getId(), mapper, reverseMapper)
+            routeIds.map { id ->
+                val index = findPageIndex(pagesById, id)
+                pagesById[index]
+            }
         }
-        return WikiRoutes.Result(path, System.nanoTime() - startTime)
+        return Result(path, duration)
     }
 
-    fun hasPage(name: String?): Boolean {
+    fun hasPage(name: String): Boolean {
         val page = getPage(name)
         return page != null
     }
 
-    fun findWildcards(prefix: String, maxMatches: Int): MutableList<String?> {
-        val matches: MutableList<String?> = Lists.newArrayList()
+    fun findWildcards(prefix: String, maxMatches: Int): List<String> {
+        val matches = mutableListOf<String>()
         val ix = findPageByName(prefix)
         val startingPoint = if (ix < 0) -ix - 1 else ix
         for (i in startingPoint..<pagesByTitle.size) {
@@ -97,13 +92,13 @@ class WikiRoutes(pages: MutableList<BufferWikiPage>) {
         return matches
     }
 
-    private fun getPage(name: String?): BufferWikiPage? {
+    private fun getPage(name: String): BufferWikiPage? {
         val ix = findPageByName(name)
         if (ix < 0) return null
         return pagesByTitle.get(ix)
     }
 
-    private fun findPageByName(name: String?): Int {
+    private fun findPageByName(name: String): Int {
         val target = BufferWikiPage.createTempFor(name)
         return pagesByTitle.binarySearch(
             target,
@@ -134,53 +129,57 @@ class WikiRoutes(pages: MutableList<BufferWikiPage>) {
         }
 
         fun reverse(): LeanPageMapper {
-            val startTime = System.currentTimeMillis()
-            val reverseCounts: IntIntMap = HashIntIntMaps.newMutableMap(index.size)
-            val reverseLinkerCount = intArrayOf(0)
-            visitLinkArray(
-                links,
-                IntIntIntIntProcedure { linkerId: Int, linkCount: Int, firstLinkIndex: Int, firstPastLastLinkIndex: Int ->
+            val (res, duration) = measureTimedValue {
+                val reverseCounts: IntIntMap = HashIntIntMaps.newMutableMap(index.size)
+                var reverseLinkerCount = 0
+                visitLinkArray(
+                    links
+                ) { linkerId: Int, linkCount: Int, firstLinkIndex: Int, firstPastLastLinkIndex: Int ->
                     for (i in firstLinkIndex..<firstPastLastLinkIndex) {
                         val targetId = links[i]
                         reverseCounts.addValue(targetId, 1, 0)
-                        reverseLinkerCount[0]++
+                        reverseLinkerCount++
                     }
+                }
+                val reversedIndex = HashIntIntMaps.newMutableMap(reverseCounts.size)
+
+                var linkIndex = 0
+                val reversedLinks =
+                    IntArray((reverseLinkerCount + ADDITIONAL_INFO * reverseCounts.size.toLong()).toIntOrThrow())
+                reverseCounts.forEach(IntIntConsumer { targetId: Int, count: Int ->
+                    val startLinkIndex = linkIndex
+                    reversedIndex.put(targetId, startLinkIndex)
+                    reversedLinks[startLinkIndex] = targetId
+                    reversedLinks[startLinkIndex + 1] = 0
+                    linkIndex += count + ADDITIONAL_INFO
                 })
-            val reversedIndex = HashIntIntMaps.newMutableMap(reverseCounts.size)
-            val linkIndex = intArrayOf(0)
-            val reversedLinks =
-                IntArray(Ints.checkedCast((reverseLinkerCount[0] + ADDITIONAL_INFO * reverseCounts.size).toLong()))
-            reverseCounts.forEach(IntIntConsumer { targetId: Int, count: Int ->
-                val startLinkIndex = linkIndex[0]
-                reversedIndex.put(targetId, startLinkIndex)
-                reversedLinks[startLinkIndex] = targetId
-                reversedLinks[startLinkIndex + 1] = 0
-                linkIndex[0] += count + ADDITIONAL_INFO
-            })
-            fillLinks(reversedLinks, reversedIndex)
+                fillLinks(reversedLinks, reversedIndex)
+                reversedIndex to reversedLinks
+            }
             logger.info(Supplier {
                 String.format(
                     "Took %d ms to create reverse page mapper",
-                    System.currentTimeMillis() - startTime
+                    duration.inWholeMilliseconds
                 )
             })
+            val (reversedIndex, reversedLinks) = res
             return LeanPageMapper(reversedIndex, reversedLinks)
         }
 
         fun fillLinks(reversedLinks: IntArray, reversedIndex: HashIntIntMap) {
             visitLinkArray(
-                links,
-                IntIntIntIntProcedure { linkerId: Int, linkCount: Int, firstLinkIndex: Int, firstPastLastLinkIndex: Int ->
-                    for (i in firstLinkIndex..<firstPastLastLinkIndex) {
-                        val targetId = links[i]
-                        val startLinkIndex = reversedIndex.getOrDefault(targetId, Int.Companion.MIN_VALUE)
-                        val reverseLinkIndex = startLinkIndex + 1
-                        val reverseLinksWritten = reversedLinks[reverseLinkIndex]
-                        val newLinkerIndex = reverseLinkIndex + reverseLinksWritten + 1
-                        reversedLinks[newLinkerIndex] = linkerId
-                        reversedLinks[reverseLinkIndex] = reverseLinksWritten + 1
-                    }
-                })
+                links
+            ) { linkerId: Int, linkCount: Int, firstLinkIndex: Int, firstPastLastLinkIndex: Int ->
+                for (i in firstLinkIndex..<firstPastLastLinkIndex) {
+                    val targetId = links[i]
+                    val startLinkIndex = reversedIndex.getOrDefault(targetId, Int.Companion.MIN_VALUE)
+                    val reverseLinkIndex = startLinkIndex + 1
+                    val reverseLinksWritten = reversedLinks[reverseLinkIndex]
+                    val newLinkerIndex = reverseLinkIndex + reverseLinksWritten + 1
+                    reversedLinks[newLinkerIndex] = linkerId
+                    reversedLinks[reverseLinkIndex] = reverseLinksWritten + 1
+                }
+            }
         }
 
         companion object {
@@ -204,10 +203,10 @@ class WikiRoutes(pages: MutableList<BufferWikiPage>) {
                 }
             }
 
-            fun convert(pages: MutableList<BufferWikiPage>): LeanPageMapper {
+            fun convert(pages: List<BufferWikiPage>): LeanPageMapper {
                 val startTime = System.currentTimeMillis()
-                val totalLinkCount = pages.stream().mapToLong { obj: BufferWikiPage? -> obj!!.getLinkCount().toLong() }.sum()
-                val links = IntArray(Ints.checkedCast(totalLinkCount) + ADDITIONAL_INFO * pages.size)
+                val totalLinkCount = pages.asSequence().map { it.linkCount.toLong() }.sum()
+                val links = IntArray(totalLinkCount.toIntOrThrow() + ADDITIONAL_INFO * pages.size)
                 val map = HashIntIntMaps.getDefaultFactory()
                     .withHashConfig(HashConfig.fromLoads(0.1, 0.5, 0.75))
                     .newImmutableMap(Consumer { mapCreator: IntIntConsumer? ->
@@ -238,14 +237,14 @@ class WikiRoutes(pages: MutableList<BufferWikiPage>) {
 
     class Result(
         private val route: List<BufferWikiPage>,
-        private val runtimeInNanos: Long
+        private val duration: Duration
     ) {
         fun getRoute(): List<LeanWikiPage<*>> {
             return route
         }
 
         val runtime: Long
-            get() = TimeUnit.NANOSECONDS.toMillis(runtimeInNanos)
+            get() = duration.inWholeMilliseconds
 
         override fun toString(): String {
             if (route.isEmpty()) return "No route found"
@@ -260,35 +259,34 @@ class WikiRoutes(pages: MutableList<BufferWikiPage>) {
 
         init {
             val logLevel = System.getProperty("wikilinks.loglevel", "WARNING")
-            var level: Level?
-            try {
-                level = Level.parse(logLevel)
-            } catch (e: IllegalArgumentException) {
-                level = Level.WARNING
+            val level: Level = try {
+                Level.parse(logLevel)
+            } catch (_: IllegalArgumentException) {
+                Level.WARNING
             }
             logger.setLevel(level)
         }
 
         private fun sortIfNeeded(
             list: MutableList<BufferWikiPage>,
-            name: String?,
+            name: String,
             comp: Comparator<in BufferWikiPage>
         ) {
             val startTime = System.currentTimeMillis()
             if (!isSorted(list, comp)) {
-                logger.info { "Starting to sort by " + name }
+                logger.info { "Starting to sort by $name" }
                 list.sortWith(comp)
-                logger.info(Supplier {
+                logger.info {
                     String.format(
                         "Took %d ms to sort by %s",
                         System.currentTimeMillis() - startTime,
                         name
                     )
-                })
+                }
             }
         }
 
-        private fun isSorted(pages: MutableList<BufferWikiPage>, comparator: Comparator<in BufferWikiPage>): Boolean {
+        private fun isSorted(pages: List<BufferWikiPage>, comparator: Comparator<in BufferWikiPage>): Boolean {
             var earlier: BufferWikiPage? = null
             for (page in pages) {
                 if (earlier != null) {
@@ -313,3 +311,12 @@ class WikiRoutes(pages: MutableList<BufferWikiPage>) {
         }
     }
 }
+
+fun Long.toIntOrThrow(): Int {
+    if (this in Int.MIN_VALUE.toLong()..Int.MAX_VALUE.toLong()) {
+        return toInt()
+    } else {
+        throw IllegalArgumentException("Too large to fit int $this")
+    }
+}
+

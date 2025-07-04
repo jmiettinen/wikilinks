@@ -223,7 +223,7 @@ object Main {
     }
 
     @Throws(IOException::class)
-    private fun doInteractive(pages: MutableList<BufferWikiPage>, console: BufferedReader?) {
+    private fun doInteractive(pages: List<BufferWikiPage>, console: BufferedReader) {
         println("Starting interactive mode")
 
         val initStart = System.currentTimeMillis()
