@@ -21,8 +21,8 @@ repositories {
 dependencies {
     // Use JUnit Jupiter for testing.
     testImplementation(libs.junit.jupiter)
-    testImplementation(libs.hamcrest)
     testImplementation(libs.jgrapht)
+    testImplementation(libs.kotest.assertions)
 
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 

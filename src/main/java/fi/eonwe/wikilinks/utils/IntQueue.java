@@ -5,6 +5,8 @@ import java.util.function.IntConsumer;
 
 import com.google.common.primitives.Ints;
 
+import javax.annotation.Nonnull;
+
 /**
  */
 public class IntQueue {
@@ -23,6 +25,7 @@ public class IntQueue {
         return new IntQueue(startSize, true);
     }
 
+    @Nonnull
     public static IntQueue fixedSizeQueue(int maxLength) {
         return new IntQueue(maxLength, false);
     }

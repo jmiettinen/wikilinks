@@ -7,7 +7,7 @@ import com.google.common.primitives.UnsignedBytes;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.util.Arrays;
+import java.nio.charset.StandardCharsets;
 import java.util.function.IntConsumer;
 
 /**
@@ -43,7 +43,7 @@ public class BufferWikiPage implements LeanWikiPage<BufferWikiPage> {
     }
 
     private static ByteBuffer bufferFrom(int id, int[] links, String title, boolean isRedirect) {
-        byte[] stringBytes = title.getBytes(Charsets.UTF_8);
+        byte[] stringBytes = title.getBytes(StandardCharsets.UTF_8);
         final int linksSize = Integer.BYTES * links.length;
         final int stringSize = Byte.BYTES * stringBytes.length;
         ByteBuffer buffer = ByteBuffer.allocate(getHeaderSize() + linksSize + stringSize);
@@ -78,13 +78,13 @@ public class BufferWikiPage implements LeanWikiPage<BufferWikiPage> {
         if (data.hasArray()) {
             dataArray = data.array();
             offset += data.arrayOffset();
-            return new String(dataArray, offset, stringSize, Charsets.UTF_8);
+            return new String(dataArray, offset, stringSize, StandardCharsets.UTF_8);
         } else {
             dataArray = new byte[stringSize];
             ByteBuffer copy = data.duplicate();
             copy.position(offset);
             copy.get(dataArray);
-            return new String(dataArray, 0, stringSize, Charsets.UTF_8);
+            return new String(dataArray, 0, stringSize, StandardCharsets.UTF_8);
         }
     }
 
