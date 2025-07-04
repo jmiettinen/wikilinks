@@ -10,9 +10,7 @@ import net.openhft.koloboke.collect.map.hash.HashIntIntMap
 import net.openhft.koloboke.collect.map.hash.HashIntIntMaps
 import net.openhft.koloboke.function.IntIntConsumer
 import java.util.concurrent.ThreadLocalRandom
-import java.util.function.Consumer
 import java.util.function.IntConsumer
-import java.util.function.Supplier
 import java.util.logging.Level
 import java.util.logging.Logger
 import kotlin.time.Duration
@@ -82,7 +80,7 @@ class WikiRoutes(pages: List<BufferWikiPage>) {
         val ix = findPageByName(prefix)
         val startingPoint = if (ix < 0) -ix - 1 else ix
         for (i in startingPoint..<pagesByTitle.size) {
-            val title = pagesByTitle.get(i).getTitle()
+            val title = pagesByTitle[i].getTitle()
             if (title.startsWith(prefix) && matches.size < maxMatches) {
                 matches.add(title)
             } else {
@@ -95,7 +93,7 @@ class WikiRoutes(pages: List<BufferWikiPage>) {
     private fun getPage(name: String): BufferWikiPage? {
         val ix = findPageByName(name)
         if (ix < 0) return null
-        return pagesByTitle.get(ix)
+        return pagesByTitle[ix]
     }
 
     private fun findPageByName(name: String): Int {
@@ -110,11 +108,12 @@ class WikiRoutes(pages: List<BufferWikiPage>) {
     }
 
     private class LeanPageMapper(private val index: HashIntIntMap, private val links: IntArray) : PageMapper {
-        override fun forEachLinkIndex(pageId: Int, c: IntConsumer) {
-            val value = index.getOrDefault(pageId, -1)
+        override fun forEachLinkIndex(pageIndex: Int, c: IntConsumer) {
+            val indexInLinks = index.getOrDefault(pageIndex, -1)
             // Not all pages are linked to.
-            if (value < 0) return
-            visitLinks(value, c)
+            if (indexInLinks >= 0) {
+                visitLinks(indexInLinks, c)
+            }
         }
 
         fun visitLinks(indexInLinks: Int, c: IntConsumer) {
@@ -156,12 +155,12 @@ class WikiRoutes(pages: List<BufferWikiPage>) {
                 fillLinks(reversedLinks, reversedIndex)
                 reversedIndex to reversedLinks
             }
-            logger.info(Supplier {
+            logger.info {
                 String.format(
                     "Took %d ms to create reverse page mapper",
                     duration.inWholeMilliseconds
                 )
-            })
+            }
             val (reversedIndex, reversedLinks) = res
             return LeanPageMapper(reversedIndex, reversedLinks)
         }
@@ -209,27 +208,27 @@ class WikiRoutes(pages: List<BufferWikiPage>) {
                 val links = IntArray(totalLinkCount.toIntOrThrow() + ADDITIONAL_INFO * pages.size)
                 val map = HashIntIntMaps.getDefaultFactory()
                     .withHashConfig(HashConfig.fromLoads(0.1, 0.5, 0.75))
-                    .newImmutableMap(Consumer { mapCreator: IntIntConsumer? ->
+                    .newImmutableMap({ mapCreator: IntIntConsumer? ->
                         val linkIndex = intArrayOf(0)
                         for (page in pages) {
                             val sourceId = page.getId()
-                            val linkCount = page.getLinkCount()
+                            val linkCount = page.linkCount
                             val startLinkIndex = linkIndex[0]
                             links[linkIndex[0]++] = sourceId
                             links[linkIndex[0]++] = linkCount
-                            page.forEachLink(IntConsumer { linkTarget: Int ->
+                            page.forEachLink { linkTarget: Int ->
                                 links[linkIndex[0]++] = linkTarget
-                            })
+                            }
                             mapCreator!!.accept(sourceId, startLinkIndex)
                         }
                     }, pages.size)
 
-                logger.info(Supplier {
+                logger.info {
                     String.format(
                         "Took %d ms to create page mapper",
                         System.currentTimeMillis() - startTime
                     )
-                })
+                }
                 return LeanPageMapper(map, links)
             }
         }

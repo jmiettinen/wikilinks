@@ -18,9 +18,7 @@ import java.io.FileInputStream
 import java.io.FileNotFoundException
 import java.io.FileOutputStream
 import java.io.IOException
-import java.io.InputStream
 import java.io.InputStreamReader
-import java.util.Collections
 import kotlin.system.exitProcess
 
 /**
@@ -68,39 +66,39 @@ object Main {
     }
 
     private fun printHelp() {
-        for (tmp in opts.getOptions()) {
+        for (tmp in opts.options) {
             val opt = tmp as Option
-            System.out.printf("  -%s        %s%n", opt.getOpt(), opt.getDescription())
+            System.out.printf("  -%s        %s%n", opt.opt, opt.description)
         }
     }
 
     @JvmStatic
     fun main(args: Array<String>) {
         val commandLine = checkNotNull(parseOptions(args))
-        if (commandLine.hasOption(DISPLAY_HELP) || commandLine.getOptions().size == 0) {
+        if (commandLine.hasOption(DISPLAY_HELP) || commandLine.options.size == 0) {
             printHelp()
-            System.exit(HELP_SHOWN)
+            exitProcess(HELP_SHOWN)
         }
-        val inputFile: File?
-        val source: Source?
-        if (commandLine.hasOption(XML_INPUT)) {
-            inputFile = File(commandLine.getOptionValue(XML_INPUT))
-            source = Source.XML
-        } else if (commandLine.hasOption(SERIALIZED_INPUT)) {
-            inputFile = File(commandLine.getOptionValue(SERIALIZED_INPUT))
-            source = Source.SERIALIZED
+        val (inputFile, source) =
+            if (commandLine.hasOption(XML_INPUT)) {
+                File(commandLine.getOptionValue(XML_INPUT)) to Source.XML
+            } else if (commandLine.hasOption(SERIALIZED_INPUT)) {
+                File(commandLine.getOptionValue(SERIALIZED_INPUT)) to Source.SERIALIZED
+            } else {
+                null to Source.STDIN
+            }
+        val inputStream = if (inputFile == null) {
+            null
         } else {
-            inputFile = null
-            source = Source.STDIN
+            getInputStream(inputFile)
         }
-        val inputStream = if (inputFile == null) null else getInputStream(inputFile)
         var outputFile: File? = null
         if (commandLine.hasOption(WRITE_OUTPUT)) {
             outputFile = File(commandLine.getOptionValue(WRITE_OUTPUT))
         }
         if (inputStream == null && source != Source.STDIN) {
             System.err.printf("Cannot read file \"%s\". Exiting%n", inputFile)
-            System.exit(1)
+            exitProcess(1)
         }
         var mode = OperationMode.NONE
         if (commandLine.hasOption(INTERACTIVE_MODE)) mode = OperationMode.INTERACTIVE
@@ -108,25 +106,25 @@ object Main {
         if (commandLine.hasOption(ENGLISH_WIKI_TEST)) mode = OperationMode.WIKI_TEST
         if (mode == OperationMode.INTERACTIVE && source == Source.STDIN) {
             System.err.println("Cannot have interactive mode when reading from STDIN")
-            System.exit(1)
+            exitProcess(1)
         }
         val exitValue = doRun(inputStream, inputFile, outputFile, source, mode)
-        System.exit(exitValue)
+        exitProcess(exitValue)
     }
 
     private fun getInputStream(file: File): FileInputStream? {
-        try {
-            return FileInputStream(file)
+        return try {
+            FileInputStream(file)
         } catch (e: FileNotFoundException) {
-            return null
+            null
         }
     }
 
     private fun getOutputStream(file: File): FileOutputStream? {
-        try {
-            return FileOutputStream(file)
+        return try {
+            FileOutputStream(file)
         } catch (e: FileNotFoundException) {
-            return null
+            null
         }
     }
 
@@ -157,9 +155,10 @@ object Main {
         input: FileInputStream?,
         inputFile: File?,
         outputFile: File?,
-        source: Source?,
-        mode: OperationMode?
+        source: Source,
+        mode: OperationMode
     ): Int {
+        val stdin = System.`in`
         var fos: FileOutputStream? = null
         var exitValue = 0
         if (outputFile != null) {
@@ -175,20 +174,26 @@ object Main {
         }
         if (exitValue != 0) return exitValue
         val loadStart = System.currentTimeMillis()
-        val inputFileName: String? = if (source == Source.STDIN) "<stdin>" else inputFile.toString()
+        val inputFileName = if (source == Source.STDIN) "<stdin>" else inputFile.toString()
         System.out.printf("Starting to read %s%n", inputFileName)
-        val pages = if (source == Source.XML) {
-            readXml(input!!, inputFile!!.getName().endsWith(".bz2"))
-                .also {
-                    it.sort()
-                }
-        } else if (source == Source.SERIALIZED) {
-            readFromSerialized(input!!)
-        } else {
-            WikiProcessor.readPages(System.`in`)
-                .also {
-                    it.sort()
-                }
+        val pages = when (source) {
+            Source.XML -> {
+                readXml(input!!, inputFile!!.getName().endsWith(".bz2"))
+                    .also {
+                        it.sort()
+                    }
+            }
+
+            Source.SERIALIZED -> {
+                readFromSerialized(input!!)
+            }
+
+            Source.STDIN -> {
+                WikiProcessor.readPages(stdin)
+                    .also {
+                        it.sort()
+                    }
+            }
         }
         System.out.printf("Read %s in %d ms%n", inputFileName, System.currentTimeMillis() - loadStart)
         if (fos != null) {
@@ -204,9 +209,9 @@ object Main {
             System.out.printf("Finished in %d ms%n", System.currentTimeMillis() - writeStart)
         }
         if (exitValue != 0) return exitValue
-        if (mode == OperationMode.INTERACTIVE) {
-            try {
-                InputStreamReader(System.`in`).use { ir ->
+        when (mode) {
+            OperationMode.INTERACTIVE -> try {
+                InputStreamReader(stdin).use { ir ->
                     BufferedReader(ir).use { br ->
                         doInteractive(pages, br)
                     }
@@ -214,10 +219,10 @@ object Main {
             } catch (e: IOException) {
                 reportErrorAndExit(e)
             }
-        } else if (mode == OperationMode.BENCHMARK) {
-            Benchmarking.runBenchmarks(pages, 50)
-        } else if (mode == OperationMode.WIKI_TEST) {
-            Benchmarking.runBenchmarksAndTest(pages)
+            OperationMode.BENCHMARK -> Benchmarking.runBenchmarks(pages, 50)
+            OperationMode.WIKI_TEST -> Benchmarking.runBenchmarksAndTest(pages)
+
+            OperationMode.NONE -> {}
         }
         return exitValue
     }

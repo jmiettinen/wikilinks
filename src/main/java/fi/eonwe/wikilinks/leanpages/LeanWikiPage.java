@@ -1,5 +1,7 @@
 package fi.eonwe.wikilinks.leanpages;
 
+import org.jetbrains.annotations.NotNull;
+
 import java.nio.ByteBuffer;
 import java.util.function.IntConsumer;
 
@@ -17,7 +19,7 @@ public interface LeanWikiPage<T extends LeanWikiPage<T>> extends Comparable<T> {
 
     int compareTitle(T other);
 
-    default int compareTo(T other) {
+    default int compareTo(@NotNull T other) {
         return compareTitle(other);
     }
 

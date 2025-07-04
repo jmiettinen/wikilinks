@@ -19,7 +19,7 @@ object Interactive {
         while (true) {
             print("> ")
             val read = reader.readLine()
-            val trimmed = if (read == null) "" else read.trim { it <= ' ' }
+            val trimmed = read?.trim { it <= ' ' } ?: ""
             if (wildcard == trimmed) {
                 System.out.printf("Must have at last one char before the wildcards%n")
             } else if (trimmed.endsWith(wildcard)) {
@@ -31,7 +31,7 @@ object Interactive {
                     System.out.printf(
                         "At least these articles start with %s: %s%n",
                         Helpers.quote(prefix),
-                        matches.stream().map<String?> { str: String? -> Helpers.quote(str) }.collect(
+                        matches.stream().map { str: String? -> Helpers.quote(str) }.collect(
                             Collectors.toList()
                         )
                     )
@@ -67,24 +67,24 @@ object Interactive {
             if (route.getRoute().isEmpty()) {
                 routeString = "No route found"
             } else {
-                routeString = "Route: " + route.toString()
+                routeString = "Route: $route"
             }
             result = String.format("%s (in %d ms)", routeString, route.runtime)
         } catch (e: BadRouteException) {
             if (e.endExist()) {
-                if (e.startExists()) {
-                    result = String.format("No route found between %s and %s", e.getStartName(), e.getEndName())
+                result = if (e.startExists()) {
+                    String.format("No route found between %s and %s", e.startName, e.endName)
                 } else {
-                    result = String.format("Starting point %s does not exists", e.getStartName())
+                    String.format("Starting point %s does not exists", e.startName)
                 }
             } else {
                 if (e.startExists()) {
-                    result = String.format("End point %s does not exists", e.getEndName())
+                    result = String.format("End point %s does not exists", e.endName)
                 } else {
                     result = String.format(
                         "Neither start point %s or end point %s do exist",
-                        e.getStartName(),
-                        e.getEndName()
+                        e.startName,
+                        e.endName
                     )
                 }
             }

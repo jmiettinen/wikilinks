@@ -79,7 +79,7 @@ class IntQueueTest {
                         Assertions.assertEquals(jdkQueue.size, queue.size(), "Sizes differ")
                         noop = false
                     }
-                    Assertions.assertTrue(queue.isEmpty())
+                    Assertions.assertTrue(queue.isEmpty)
                     i = 0
                 }
                 if (!noop) iteration++

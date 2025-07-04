@@ -11,7 +11,6 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.WritableByteChannel;
 import java.util.Collection;
 import java.util.List;
-import java.util.function.Consumer;
 import java.util.stream.Stream;
 
 /**
@@ -112,14 +111,11 @@ public abstract class AbstractSerialization<T extends LeanWikiPage<T>> {
         buffer.flip();
         channel.write(buffer);
         try {
-        graph.forEach(new Consumer<T>() {
-            @Override
-            public void accept(T t) {
-                try {
-                    channel.write(t.getBuffer());
-                } catch (IOException e) {
-                    throw new UncheckedIOException(e);
-                }
+        graph.forEach(t -> {
+            try {
+                channel.write(t.getBuffer());
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
             }
         });
         } catch (UncheckedIOException e) {

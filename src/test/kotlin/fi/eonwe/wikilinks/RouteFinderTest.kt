@@ -1,5 +1,6 @@
 package fi.eonwe.wikilinks
 
+import fi.eonwe.wikilinks.leanpages.BufferWikiPage
 import fi.eonwe.wikilinks.leanpages.OrderedPage
 import io.kotest.matchers.shouldBe
 import org.jgrapht.EdgeFactory
@@ -81,7 +82,7 @@ class RouteFinderTest {
             val startPoints =
                 Stream.concat(
                     path.stream().map { intEdge: IntEdge -> intEdge.start }, Stream.of(
-                        path.get(path.size - 1).end
+                        path[path.size - 1].end
                     )
                 ).mapToInt { obj: Int? -> obj!! }.toArray()
             return startPoints
@@ -100,12 +101,8 @@ class RouteFinderTest {
             for (vertex in graph.vertexSet()) {
                 val out = graph.outgoingEdgesOf(vertex)
                 val targets = out.stream().mapToInt { e: IntEdge? -> e!!.end }.toArray()
-                val page: OrderedPage = object : OrderedPage(null, targets) {
-                    private val id: Int = vertex
-                    override fun getId(): Int {
-                        return id
-                    }
-                }
+                val bwp = BufferWikiPage.createFrom(vertex, IntArray(0), "", false)
+                val page = OrderedPage(bwp, targets)
                 result.put(vertex, page)
             }
             return result

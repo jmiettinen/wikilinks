@@ -21,10 +21,11 @@ public class BufferWikiPage implements LeanWikiPage<BufferWikiPage> {
     private static final int LINKS_OFFSET = LINK_SIZE_OFFSET + Short.BYTES;
     private static final int TITLE_SIZE_OFFSET = LINKS_OFFSET + Integer.BYTES;
     private static final int TITLE_OFFSET = TITLE_SIZE_OFFSET + Short.BYTES;
+    private static final int ID_IS_UNSET = Integer.MIN_VALUE;
 
     private final ByteBuffer data;
     private final int offset;
-    private int id = Integer.MIN_VALUE;
+    private int id = ID_IS_UNSET;
 
     private static final int[] EMPTY_ARRAY = new int[0];
 
@@ -118,7 +119,7 @@ public class BufferWikiPage implements LeanWikiPage<BufferWikiPage> {
 
     void fetchAndStoreId() {
         int id = this.id;
-        if (id == Integer.MIN_VALUE) {
+        if (id == ID_IS_UNSET) {
             this.id = getRawId();
         }
     }
@@ -166,8 +167,7 @@ public class BufferWikiPage implements LeanWikiPage<BufferWikiPage> {
 
     @Override
     public boolean equals(Object obj) {
-        if (obj instanceof BufferWikiPage) {
-            BufferWikiPage other = (BufferWikiPage) obj;
+        if (obj instanceof BufferWikiPage other) {
             int len1 = size();
             int len2 = size();
             if (len1 != len2) return false;

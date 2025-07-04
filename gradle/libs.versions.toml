@@ -20,7 +20,6 @@ logback = { module = "ch.qos.logback:logback-classic", version.ref = "logback" }
 findbugs = { module = "com.google.code.findbugs:jsr305", version.ref = "findbugs" }
 commons-cli = { module = "commons-cli:commons-cli", version.ref = "commons-cli"}
 bliki = { module = "info.bliki.wiki:bliki-core", version.ref = "bliki" }
-koloboke-api = { module = "net.openhft:koloboke-api-jdk8", version.ref = "koloboke" }
 koloboke-impl = { module = "net.openhft:koloboke-impl-jdk8", version.ref = "koloboke" }
 commons-compress = { module = "org.apache.commons:commons-compress", version.ref = "commons-compress" }
 jgrapht = { module = "org.jgrapht:jgrapht-core", version.ref = "jgrapht" }

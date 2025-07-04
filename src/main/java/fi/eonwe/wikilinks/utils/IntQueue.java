@@ -3,8 +3,6 @@ package fi.eonwe.wikilinks.utils;
 import java.io.IOException;
 import java.util.function.IntConsumer;
 
-import com.google.common.primitives.Ints;
-
 import javax.annotation.Nonnull;
 
 /**
@@ -52,7 +50,7 @@ public class IntQueue {
     }
 
     private void doGrow() {
-        int newSize = Ints.saturatedCast(Math.max(8, buffer.length * 3L / 2));
+        int newSize = Helpers.saturatedCast(Math.max(8, buffer.length * 3L / 2));
         int[] newBuffer = new int[newSize];
         final int[] oldBuffer = this.buffer;
         final int oldHead = head;

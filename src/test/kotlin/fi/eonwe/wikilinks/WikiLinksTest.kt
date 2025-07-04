@@ -24,7 +24,6 @@ import java.nio.channels.WritableByteChannel
 import java.util.Arrays
 import java.util.Collections
 import java.util.function.Consumer
-import java.util.function.IntConsumer
 import kotlin.math.min
 
 class WikiLinksTest {
@@ -36,7 +35,7 @@ class WikiLinksTest {
             val buffer = src.duplicate()
             val tmp = ByteArray(4096)
             var written = 0
-            var readLen = 0
+            var readLen: Int
             do {
                 val left = buffer.limit() - buffer.position()
                 readLen = min(left, tmp.size)
@@ -64,13 +63,13 @@ class WikiLinksTest {
         val fooPage = WikiPageData("foo", 2, arrayOfNulls<PagePointer>(0))
         val map = buildMap {
             for (page in listOf(fooDir, foofooDir, fooPage)) {
-                this.put(page.getTitle(), PagePointer(page))
+                this.put(page.title(), PagePointer(page))
             }
         }
         WikiProcessor.dropRedirectLoops(convert(map))
 
         listOf(fooDir, foofooDir).map {
-            map[it.title]?.page!!
+            map[it.title()]?.page!!
         } shouldBeEqual listOf(fooPage, fooPage)
     }
 
@@ -83,12 +82,12 @@ class WikiLinksTest {
         val fooPage = WikiPageData("foo", 3, arrayOfNulls<PagePointer>(0))
         val map = buildMap {
             listOf(fooDir, foofooDir, foofoofooDir, fooPage).forEach { page ->
-                put(page.getTitle(), PagePointer(page))
+                put(page.title(), PagePointer(page))
             }
         }
         WikiProcessor.dropRedirectLoops(convert(map))
         val tmp = listOf(fooDir, foofooDir, foofoofooDir).fold(0) { acc, p ->
-            if (map.get(p.title)?.page != null) {
+            if (map[p.title()]?.page != null) {
                 acc + 1
             } else {
                 acc
@@ -103,7 +102,7 @@ class WikiLinksTest {
         map.size shouldBe 4
         val packedWikiPages = WikiProcessor.packPages(convert(map))
         for (i in 0..<map.size) {
-            val page = packedWikiPages.get(i)
+            val page = packedWikiPages[i]
             page.id shouldBeEqual i
             page.title shouldBeEqual "title_$i"
         }
@@ -120,7 +119,7 @@ class WikiLinksTest {
             t shouldStartWith prefix
         }
         val deserialized = serializeAndDeserialize(originals)
-        Collections.sort<BufferWikiPage?>(deserialized)
+        Collections.sort(deserialized)
         for (i in titles.indices) {
             deserialized[i]!!.title shouldBeEqual titles[i]
         }
@@ -132,7 +131,7 @@ class WikiLinksTest {
         val readFromXml = WikiProcessor.packPages(convert(createSimpleDenseGraph(4, prefix, true)))
         readFromXml.forEach(Consumer { p ->
             val set = mutableSetOf<Int>()
-            p.forEachLink(IntConsumer { e: Int -> set.add(e) })
+            p.forEachLink { e: Int -> set.add(e) }
             p.linkCount shouldBeEqual set.size
         })
     }
@@ -153,8 +152,8 @@ class WikiLinksTest {
 
         read.size shouldBe originals.size
         for (i in read.indices) {
-            val fromXml = originals.get(i)
-            val deserialized = read.get(i)
+            val fromXml = originals[i]
+            val deserialized = read[i]
 
             deserialized.title shouldStartWith prefix
             deserialized.title shouldBe fromXml.title
@@ -180,8 +179,8 @@ class WikiLinksTest {
                 val readFromFile = serializer.readFromSerialized(fc)
                 readFromFile.size shouldBe readFromXml.size
                 for (i in readFromXml.indices) {
-                    val fromXml = readFromXml.get(i)
-                    val deserialized = readFromFile.get(i)
+                    val fromXml = readFromXml[i]
+                    val deserialized = readFromFile[i]
 
                     deserialized.title shouldStartWith prefix
                     deserialized.title shouldBe fromXml.title
