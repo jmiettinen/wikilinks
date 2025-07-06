@@ -9,11 +9,16 @@ import info.bliki.wiki.dump.WikiPatternMatcher
 import info.bliki.wiki.dump.WikiXMLParser
 import net.openhft.koloboke.collect.map.hash.HashObjObjMap
 import net.openhft.koloboke.collect.map.hash.HashObjObjMaps
+import org.apache.commons.io.input.CloseShieldInputStream
 import org.xml.sax.SAXException
+import java.io.BufferedInputStream
+import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.InputStream
+import java.nio.ByteBuffer
 import java.util.Arrays
 import java.util.IdentityHashMap
+import kotlin.math.min
 
 /**
  */
@@ -61,6 +66,7 @@ class WikiProcessor private constructor() {
     }
 
     companion object {
+
         fun readPages(input: InputStream): MutableList<BufferWikiPage> {
             val processor = WikiProcessor()
             val pages = processor.preProcess(input)
@@ -80,7 +86,7 @@ class WikiProcessor private constructor() {
             return linkName
         }
 
-        private fun fixPagePointers(titleToPage: HashObjObjMap<String, PagePointer>, page: WikiPage) {
+        fun fixPagePointers(titleToPage: HashObjObjMap<String, PagePointer>, page: WikiPage) {
             var pointer = titleToPage[page.title()]
             if (pointer != null) {
                 pointer.page = page

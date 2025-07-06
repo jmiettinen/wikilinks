@@ -19,6 +19,7 @@ import java.io.FileNotFoundException
 import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStreamReader
+import kotlin.math.max
 import kotlin.system.exitProcess
 
 /**
@@ -115,7 +116,7 @@ object Main {
     private fun getInputStream(file: File): FileInputStream? {
         return try {
             FileInputStream(file)
-        } catch (e: FileNotFoundException) {
+        } catch (_: FileNotFoundException) {
             null
         }
     }
@@ -237,35 +238,50 @@ object Main {
         Interactive.doSearch(routes, console)
     }
 
-    private fun printStatistics(pages: MutableCollection<out LeanWikiPage<*>>) {
+    private fun printStatistics(pages: Iterable<LeanWikiPage<*>>) {
         val statistics = reportStatistics(pages)
-        System.out.printf("There are %d pages in total%n", pages.size)
-        System.out.printf("The largest id found is %d%n", statistics[0])
-        System.out.printf("There are %d links in total%n", statistics[1])
-        System.out.printf("The largest amount of links found is %d%n", statistics[2])
-        System.out.printf("Total length of the titles is %d bytes%n", statistics[3])
-        System.out.printf("The longest title is %d bytes%n", statistics[4])
+        System.out.printf("There are %d pages in total%n", statistics.totalPageCount)
+        System.out.printf("The largest id found is %d%n", statistics.largestId)
+        System.out.printf("There are %d links in total%n", statistics.totalLinkCount)
+        System.out.printf("The largest amount of links found is %d%n", statistics.largestLinkCount)
+        System.out.printf("Total length of the titles is %d bytes%n", statistics.titleTotal)
+        System.out.printf("The longest title is %d bytes%n", statistics.longestTitle)
     }
 
-    fun reportStatistics(pages: Iterable<LeanWikiPage<*>>): LongArray {
+    data class Statistics(
+        val largestId: Long,
+        val totalLinkCount: Long,
+        val largestLinkCount: Long,
+        val titleTotal: Long,
+        val longestTitle: Long,
+        val totalPageCount: Long,
+    )
+
+    fun reportStatistics(pages: Iterable<LeanWikiPage<*>>): Statistics {
         var largestId: Long = -1
         var linkCount: Long = 0
         var titleTotal: Long = 0
         var longestTitle: Long = -1
         var largestLinkCount: Long = -1
+        var pageCount: Long  = 0
         for (page in pages) {
-            val pageId = page.getId().toLong()
-            if (pageId > largestId) {
-                largestId = pageId
-            }
+            pageCount++
+            largestId = max(largestId, page.getId().toLong())
             val thisLinkCount = page.getLinkCount().toLong()
-            if (thisLinkCount > largestLinkCount) largestLinkCount = thisLinkCount
+            largestLinkCount = max(largestLinkCount, thisLinkCount)
             linkCount += thisLinkCount
-            val thisPageTitle = page.getTitleLength().toLong()
-            if (thisPageTitle > longestTitle) longestTitle = thisPageTitle
-            titleTotal += thisPageTitle
+            val thisPageTitleLength = page.getTitleLength().toLong()
+            longestTitle = max(longestTitle, thisPageTitleLength)
+            titleTotal += thisPageTitleLength
         }
-        return longArrayOf(largestId, linkCount, largestLinkCount, titleTotal, longestTitle)
+        return Statistics(
+            totalPageCount = pageCount,
+            largestId = largestId,
+            totalLinkCount = linkCount,
+            largestLinkCount = largestLinkCount,
+            titleTotal = titleTotal,
+            longestTitle = longestTitle
+        )
     }
 
     fun reportErrorAndExit(t: Throwable): Nothing {

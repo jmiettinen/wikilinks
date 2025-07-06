@@ -1,16 +1,19 @@
 package fi.eonwe.wikilinks
 
+import fi.eonwe.wikilinks.TestHelper.usingTestDump
 import fi.eonwe.wikilinks.leanpages.BufferWikiPage
 import io.kotest.matchers.collections.shouldContainExactly
 import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream
 import org.junit.jupiter.api.Test
+import java.io.InputStream
 import java.util.stream.Collectors
 
 class WikiProcessorTest {
+
     @Test
     fun itReadSilesionWikiPageNames() {
-        javaClass.getResourceAsStream("/szlwiki-20190801-pages-articles-multistream.xml.bz2").use { `is` ->
-            BZip2CompressorInputStream(`is`, true).use { wikiInput ->
+        usingTestDump { input: InputStream ->
+            BZip2CompressorInputStream(input, true).use { wikiInput ->
                 val pages = WikiProcessor.readPages(wikiInput)
                 val pageNames =
                     pages.stream().map { obj: BufferWikiPage? -> obj!!.getTitle() }.collect(Collectors.toSet())
@@ -21,4 +24,5 @@ class WikiProcessorTest {
             }
         }
     }
+
 }
