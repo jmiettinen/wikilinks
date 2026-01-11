@@ -3,7 +3,6 @@ package fi.eonwe.wikilinks.leanpages;
 import com.google.common.collect.Lists;
 import com.google.common.primitives.Ints;
 
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
@@ -11,13 +10,8 @@ import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
 import java.nio.channels.WritableByteChannel;
 import java.util.Collection;
-import java.util.Iterator;
 import java.util.List;
-import java.util.NoSuchElementException;
-import java.util.function.Consumer;
 import java.util.stream.Stream;
-
-import javax.annotation.Nullable;
 
 /**
  */
@@ -105,91 +99,6 @@ public abstract class AbstractSerialization<T extends LeanWikiPage<T>> {
         return pages;
     }
 
-    private class Flyweight implements Iterable<T> {
-
-        private final BufferProvider bufferProvider;
-        private IOException exception;
-        private long fileSize;
-
-        public Flyweight(BufferProvider bufferProvider) {
-            this.bufferProvider = bufferProvider;
-
-            doTry(() -> {
-                try {
-                    this.fileSize = bufferProvider.size();
-                } catch (IOException e) {
-                    throw new UncheckedIOException(e);
-                }
-            });
-        }
-
-        private void doTry(Runnable r) {
-            try {
-                if (exception == null) r.run();
-            } catch (UncheckedIOException e) {
-                this.exception = e.getCause();
-            }
-        }
-
-        @Override
-        public Iterator<T> iterator() {
-            return new Iterator<T>() {
-                boolean isBroken = fileSize == 0;
-                long startOffset = 0;
-                long readSize = Math.min(fileSize - startOffset,  headerSize());
-                ByteBuffer buffer;
-                int[] lastOffset = { 0 };
-                int[] readCount = { 0 };
-                int count;
-                @Nullable T next = null;
-                {
-                    try {
-                        buffer = bufferProvider.map(startOffset, readSize);
-                        long[] headerData = new long[2];
-                        readHeader(buffer, headerData);
-                        setByteOrder(buffer);
-                        int versionNumber = (int) headerData[0];
-                        if (versionNumber != getMagicCookie()) {
-                            isBroken = true;
-                        }
-                        count = Ints.checkedCast(headerData[1]);
-                        startOffset += readSize;
-                    } catch (IOException e) {
-                        isBroken = true;
-                    }
-                }
-
-                @Override
-                public boolean hasNext() {
-                    if (next == null) {
-                        fetchNext();
-                    }
-                    return next != null;
-                }
-
-                private void fetchNext() {
-                    if (isBroken) {
-                        next = null;
-                    }
-                }
-
-                @Override
-                public T next() {
-                    if (next == null) {
-                        fetchNext();
-                    }
-                    if (next == null) {
-                        throw new NoSuchElementException();
-                    } else {
-                        T returned = next;
-                        next = null;
-                        return returned;
-                    }
-                }
-            };
-        }
-    }
-
     public void serialize(Collection<T> graph, WritableByteChannel channel) throws IOException {
         serialize(graph.stream(), graph.size(), channel);
     }
@@ -202,14 +111,11 @@ public abstract class AbstractSerialization<T extends LeanWikiPage<T>> {
         buffer.flip();
         channel.write(buffer);
         try {
-        graph.forEach(new Consumer<T>() {
-            @Override
-            public void accept(T t) {
-                try {
-                    channel.write(t.getBuffer());
-                } catch (IOException e) {
-                    throw new UncheckedIOException(e);
-                }
+        graph.forEach(t -> {
+            try {
+                channel.write(t.getBuffer());
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
             }
         });
         } catch (UncheckedIOException e) {

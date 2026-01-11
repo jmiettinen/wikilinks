@@ -1,13 +1,12 @@
 package fi.eonwe.wikilinks.leanpages;
 
-import com.google.common.base.Charsets;
 import com.google.common.primitives.Ints;
 import com.google.common.primitives.Shorts;
 import com.google.common.primitives.UnsignedBytes;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.util.Arrays;
+import java.nio.charset.StandardCharsets;
 import java.util.function.IntConsumer;
 
 /**
@@ -22,10 +21,11 @@ public class BufferWikiPage implements LeanWikiPage<BufferWikiPage> {
     private static final int LINKS_OFFSET = LINK_SIZE_OFFSET + Short.BYTES;
     private static final int TITLE_SIZE_OFFSET = LINKS_OFFSET + Integer.BYTES;
     private static final int TITLE_OFFSET = TITLE_SIZE_OFFSET + Short.BYTES;
+    private static final int ID_IS_UNSET = Integer.MIN_VALUE;
 
     private final ByteBuffer data;
     private final int offset;
-    private int id = Integer.MIN_VALUE;
+    private int id = ID_IS_UNSET;
 
     private static final int[] EMPTY_ARRAY = new int[0];
 
@@ -43,7 +43,7 @@ public class BufferWikiPage implements LeanWikiPage<BufferWikiPage> {
     }
 
     private static ByteBuffer bufferFrom(int id, int[] links, String title, boolean isRedirect) {
-        byte[] stringBytes = title.getBytes(Charsets.UTF_8);
+        byte[] stringBytes = title.getBytes(StandardCharsets.UTF_8);
         final int linksSize = Integer.BYTES * links.length;
         final int stringSize = Byte.BYTES * stringBytes.length;
         ByteBuffer buffer = ByteBuffer.allocate(getHeaderSize() + linksSize + stringSize);
@@ -78,13 +78,13 @@ public class BufferWikiPage implements LeanWikiPage<BufferWikiPage> {
         if (data.hasArray()) {
             dataArray = data.array();
             offset += data.arrayOffset();
-            return new String(dataArray, offset, stringSize, Charsets.UTF_8);
+            return new String(dataArray, offset, stringSize, StandardCharsets.UTF_8);
         } else {
             dataArray = new byte[stringSize];
             ByteBuffer copy = data.duplicate();
             copy.position(offset);
             copy.get(dataArray);
-            return new String(dataArray, 0, stringSize, Charsets.UTF_8);
+            return new String(dataArray, 0, stringSize, StandardCharsets.UTF_8);
         }
     }
 
@@ -119,7 +119,7 @@ public class BufferWikiPage implements LeanWikiPage<BufferWikiPage> {
 
     void fetchAndStoreId() {
         int id = this.id;
-        if (id == Integer.MIN_VALUE) {
+        if (id == ID_IS_UNSET) {
             this.id = getRawId();
         }
     }
@@ -167,8 +167,7 @@ public class BufferWikiPage implements LeanWikiPage<BufferWikiPage> {
 
     @Override
     public boolean equals(Object obj) {
-        if (obj instanceof BufferWikiPage) {
-            BufferWikiPage other = (BufferWikiPage) obj;
+        if (obj instanceof BufferWikiPage other) {
             int len1 = size();
             int len2 = size();
             if (len1 != len2) return false;

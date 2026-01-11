@@ -22,19 +22,9 @@ and there select ["All pages, current versions only"](https://dumps.wikimedia.or
 
 ## Building
 
-To start you'll need to have Java 11, a Wikipedia dump and a Internet connection.
-On Windows you'll also need to have Bazel 1.1.0 installed or use [Bazelisk](https://github.com/bazelbuild/bazelisk) to
-install correct Bazel on-demand.
-
-For MacOS/Linux (64-bit), there's `bazelw` wrapper and Bazelisk ınstallaton in the repository.
-
-Start by compiling and packaging everything
-```
-./bazelw build //:wikilinks
-```
-Or on Windows, 
-```
-bazel build //:wikilinks
+This project uses Gradle with included wrapper.
+```bash
+./gradlew build
 ```
 
 ### A self-contained jar
@@ -93,22 +83,15 @@ presentation such as [Protocol buffers](https://developers.google.com/protocol-b
 
 ### Tests
 
-To run all tests, environment variable `RUN_SLOW_TESTS` needs to be set to `TRUE` to run all tests.
-This will take seconds to run.
+```bash
+./gradlew test
 ```
-RUN_SLOW_TESTS=TRUE ./bazelw run //src/test:all_tests
-```
-If you drop the environment variable
-```
-./bazelw run //src/test:all_tests
-```
-Slow tests will be skipped and tests run in a second or so.
 
 ## TODO
 
 Things to improve, clean up, etc
 
-- [ ] Replace own serialization format with Protobuf or similar
+- [ ] Replace own serialization format with FlatBuffers or similar
 - [ ] Drop nowadays unused hierarchies of `LeanWikiPage` and `WikiPage` 
 - [ ] Rewrite command line option handling with argparse4j or Kotlin-argparser
 - [ ] Move Wikipedia XML -> serialization format to another main

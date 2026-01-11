@@ -13,11 +13,11 @@ public interface WikiPage {
     /**
      * @return a unique identifier for this page
      */
-    int getId();
+    int id();
 
     /**
      * @return title of the page
      */
-    String getTitle();
+    String title();
 
 }

@@ -3,6 +3,7 @@ target
 *.serialized
 data/*
 .idea
+.kotlin
 
 # Ignore Gradle project-specific cache directory
 .gradle

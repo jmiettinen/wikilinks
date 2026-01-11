@@ -12,7 +12,7 @@ import static fi.eonwe.wikilinks.utils.Helpers.quote;
 public class Benchmarking {
 
     public static void runBenchmarks(List<BufferWikiPage> pages, int measurements) {
-        final Random rng = new Random(0xcafebabe);
+        final Random rng = new Random(0xcafebabeL);
         WikiRoutes routes = new WikiRoutes(pages);
         long[] runtimes = new long[measurements];
         System.out.printf("Running %d random measurements%n", measurements);
