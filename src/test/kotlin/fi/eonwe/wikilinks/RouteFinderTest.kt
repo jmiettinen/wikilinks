@@ -47,30 +47,25 @@ class RouteFinderTest {
             RandomGraphGenerator<Int?, IntEdge?>(vertexCount, edgeCount)
         val repeats = 10
         val innerRepeats = 10
-        for (i in 0..<repeats) {
+        repeat(repeats) {
             val graph = SimpleDirectedGraph(EF())
             val resultMap = mutableMapOf<String?, Int?>()
             generator.generateGraph(graph, VF(), resultMap)
             val orderedPageMap: MutableMap<Int, OrderedPage> = createFromGraph(graph)
             val vertices = graph.vertexSet()
-            for (j in 0..<innerRepeats) {
+            repeat(innerRepeats) {
                 var startVertex: Int
                 var endVertex: Int
                 do {
                     startVertex = rng.nextInt(vertices.size)
                     endVertex = rng.nextInt(vertices.size)
                 } while (startVertex == endVertex)
-                val dijkstraStart = System.currentTimeMillis()
-                val dijkstra: DijkstraShortestPath<Int?, IntEdge?> =
-                    DijkstraShortestPath(graph, startVertex, endVertex)
+                val dijkstra: DijkstraShortestPath<Int?, IntEdge?> = DijkstraShortestPath(graph, startVertex, endVertex)
                 val route: IntArray = toIntArray(dijkstra.getPathEdgeList().mapNotNull { it })
-                val jgraphtTime = System.currentTimeMillis() - dijkstraStart
 
                 val mapper: WikiRoutes.PageMapper = fromMap(orderedPageMap)
-                val myStart = System.currentTimeMillis()
                 val myRoute = RouteFinder.find(startVertex, endVertex, mapper, null)
-                val myTime = System.currentTimeMillis() - myStart
-                //                System.out.printf("%d vertices, %d edges: JGraphT=%d ms, RouteFinder=%d ms%n", vertexCount, (long) edgeCount * vertexCount, jgraphtTime, myTime);
+
                 route.size shouldBe myRoute.size
             }
         }
@@ -103,7 +98,7 @@ class RouteFinderTest {
                 val targets = out.stream().mapToInt { e: IntEdge? -> e!!.end }.toArray()
                 val bwp = BufferWikiPage.createFrom(vertex, IntArray(0), "", false)
                 val page = OrderedPage(bwp, targets)
-                result.put(vertex, page)
+                result[vertex] = page
             }
             return result
         }
