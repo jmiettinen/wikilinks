@@ -13,6 +13,7 @@ bliki = "3.1.0"
 koloboke = "0.6.8"
 jgrapht = "0.9.1"
 kotest = "5.9.1"
+kotlinx-serialization = "1.8.1"
 
 [libraries]
 guava = { module = "com.google.guava:guava", version.ref = "guava" }
@@ -26,7 +27,9 @@ koloboke-impl = { module = "net.openhft:koloboke-impl-jdk8", version.ref = "kolo
 commons-compress = { module = "org.apache.commons:commons-compress", version.ref = "commons-compress" }
 jgrapht = { module = "org.jgrapht:jgrapht-core", version.ref = "jgrapht" }
 kotest-assertions = { module = "io.kotest:kotest-assertions-core", version.ref = "kotest" }
+kotlinx-serialization-protobuf = { module = "org.jetbrains.kotlinx:kotlinx-serialization-protobuf", version.ref = "kotlinx-serialization" }
 
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version = "2.1.20" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version = "2.1.20" }
