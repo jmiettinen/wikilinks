@@ -48,18 +48,17 @@ class WikiProcessor private constructor() {
                         val links = matcher.links.asSequence()
                             .map { linkName -> possiblyCapitalize(linkName) }
                             .distinct()
-                            .toList()
-                        val pointerLinks = mutableListOf<PagePointer>()
-                        for (i in links.indices) {
-                            val link = links[i]
-                            var ptr = titleToPage[link]
-                            if (ptr == null) {
-                                ptr = PagePointer(null)
-                                titleToPage[link] = ptr
+                        val pointerLinks = buildList {
+                            links.forEach { link ->
+                                var ptr = titleToPage[link]
+                                if (ptr == null) {
+                                    ptr = PagePointer(null)
+                                    titleToPage[link] = ptr
+                                }
+                                add(ptr)
                             }
-                            pointerLinks.add(ptr)
                         }
-                        val page = WikiPageData(article.title, id, pointerLinks.toTypedArray())
+                        val page = WikiPageData(article.title, id, pointerLinks)
                         fixPagePointers(titleToPage, page)
                     }
                 }
@@ -78,9 +77,9 @@ class WikiProcessor private constructor() {
         fun readPages(input: InputStream): MutableList<BufferWikiPage> {
             val processor = WikiProcessor()
             val pages = processor.preProcess(input)
-            printStatistics(pages)
+//            printStatistics(pages)
             dropRedirectLoops(pages)
-            printStatistics(pages)
+//            printStatistics(pages)
             val packedPages = packPages(pages)
             return packedPages
         }
@@ -202,7 +201,8 @@ class WikiProcessor private constructor() {
                         true
                     } else {
                         val pageData = page as WikiPageData
-                        links = Arrays.stream(pageData.links())
+                        links = pageData.links()
+                            .stream()
                             .map { it.page }
                             .filter { it != null }
                             .mapToInt { p -> p!!.id() }
