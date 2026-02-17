@@ -25,33 +25,41 @@ import kotlin.math.min
 class WikiProcessor private constructor() {
     fun preProcess(input: InputStream): HashObjObjMap<String, PagePointer> {
         val titleToPage = HashObjObjMaps.newMutableMap<String, PagePointer>(12000000)
+        var nextInternalId = 0
+
+        fun nextPageId(): Int {
+            if (nextInternalId == Int.MAX_VALUE) {
+                throw IllegalStateException("Too many pages to index with 32-bit ids")
+            }
+            return nextInternalId++
+        }
+
         try {
             val parser = WikiXMLParser(input) { article, siteinfo ->
                 if (article.isMain) {
                     val text = article.text ?: ""
                     val matcher = WikiPatternMatcher(text)
-                    // The page identifier is assumed to integer. I don't think this is actually guaranteed anywhere
-                    // in wikimedia XML schema (if it exists), but so far I've only encountered number < 2^31.
-                    val id = article.id.toInt()
+                    // Wikimedia page ids can be larger than Int. We use a compact internal id instead.
+                    val id = nextPageId()
                     if (matcher.isRedirect) {
-                        val page = WikiRedirectPage(article.title.intern(), id, matcher.redirectText.intern())
+                        val page = WikiRedirectPage(article.title, id, matcher.redirectText)
                         fixPagePointers(titleToPage, page)
                     } else {
                         val links = matcher.links.asSequence()
                             .map { linkName -> possiblyCapitalize(linkName) }
                             .distinct()
                             .toList()
-                        val pointerLinks = arrayOfNulls<PagePointer>(links.size)
+                        val pointerLinks = mutableListOf<PagePointer>()
                         for (i in links.indices) {
                             val link = links[i]
                             var ptr = titleToPage[link]
                             if (ptr == null) {
                                 ptr = PagePointer(null)
-                                titleToPage.put(link.intern(), ptr)
+                                titleToPage[link] = ptr
                             }
-                            pointerLinks[i] = ptr
+                            pointerLinks.add(ptr)
                         }
-                        val page = WikiPageData(article.title.intern(), id, pointerLinks)
+                        val page = WikiPageData(article.title, id, pointerLinks.toTypedArray())
                         fixPagePointers(titleToPage, page)
                     }
                 }

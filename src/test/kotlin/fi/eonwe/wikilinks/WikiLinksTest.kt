@@ -60,7 +60,7 @@ class WikiLinksTest {
     fun itResolvesRedirects() {
         val fooDir = WikiRedirectPage("foo-redir", 0, "foo")
         val foofooDir = WikiRedirectPage("foo-foo-redir", 1, "foo-redir")
-        val fooPage = WikiPageData("foo", 2, arrayOfNulls<PagePointer>(0))
+        val fooPage = WikiPageData("foo", 2, emptyArray())
         val map = buildMap {
             for (page in listOf(fooDir, foofooDir, fooPage)) {
                 this.put(page.title(), PagePointer(page))
@@ -79,7 +79,7 @@ class WikiLinksTest {
         val fooDir = WikiRedirectPage("foo-redir", 0, "foo-foo-foo-redir")
         val foofooDir = WikiRedirectPage("foo-foo-redir", 1, "foo-redir")
         val foofoofooDir = WikiRedirectPage("foo-foo-foo-redir", 2, "foo-redir")
-        val fooPage = WikiPageData("foo", 3, arrayOfNulls<PagePointer>(0))
+        val fooPage = WikiPageData("foo", 3, emptyArray())
         val map = buildMap {
             listOf(fooDir, foofooDir, foofoofooDir, fooPage).forEach { page ->
                 put(page.title(), PagePointer(page))
@@ -200,13 +200,10 @@ class WikiLinksTest {
             titlePrefix: String,
             duplicates: Boolean = false
         ): HashObjObjMap<String, PagePointer> {
-            val pointers = arrayOfNulls<PagePointer>(size)
-            for (i in pointers.indices) {
-                pointers[i] = PagePointer(null)
-            }
+            val pointers = MutableList(size) { PagePointer(null) }
             val map = HashObjObjMaps.newMutableMap<String, PagePointer>()
             for (i in pointers.indices) {
-                val pagePointers: MutableList<PagePointer?> = Lists.newArrayList()
+                val pagePointers: MutableList<PagePointer> = Lists.newArrayList()
                 for (repeat in 0..<(if (duplicates) 2 else 1)) {
                     for (j in pointers.indices.reversed()) {
                         if (i == j) continue
@@ -214,7 +211,7 @@ class WikiLinksTest {
                     }
                 }
                 val title = titlePrefix + i
-                pointers[i]!!.page = WikiPageData(title, i, pagePointers.toTypedArray<PagePointer?>())
+                pointers[i].page = WikiPageData(title, i, pagePointers.toTypedArray())
                 map.put(title, pointers[i])
             }
             return map
