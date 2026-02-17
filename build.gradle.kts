@@ -30,7 +30,7 @@ dependencies {
     implementation(libs.guava)
     implementation(libs.koloboke.impl)
     implementation(libs.commons.compress)
-    implementation(libs.commons.cli)
+    implementation(libs.clikt)
     implementation(libs.bliki)
     implementation(libs.logback)
     implementation(libs.findbugs)

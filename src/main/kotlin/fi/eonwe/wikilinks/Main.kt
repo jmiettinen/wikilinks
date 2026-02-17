@@ -1,159 +1,116 @@
 package fi.eonwe.wikilinks
 
+import com.github.ajalt.clikt.core.CliktCommand
+import com.github.ajalt.clikt.core.ProgramResult
+import com.github.ajalt.clikt.core.main
+import com.github.ajalt.clikt.parameters.options.flag
+import com.github.ajalt.clikt.parameters.options.option
+import com.github.ajalt.clikt.parameters.types.file
 import fi.eonwe.wikilinks.leanpages.BufferWikiPage
 import fi.eonwe.wikilinks.leanpages.BufferWikiSerialization
 import fi.eonwe.wikilinks.leanpages.LeanWikiPage
-import org.apache.commons.cli.CommandLine
-import org.apache.commons.cli.CommandLineParser
-import org.apache.commons.cli.DefaultParser
-import org.apache.commons.cli.Option
-import org.apache.commons.cli.OptionGroup
-import org.apache.commons.cli.Options
-import org.apache.commons.cli.ParseException
 import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream
 import java.io.BufferedInputStream
 import java.io.BufferedReader
 import java.io.File
-import java.io.FileInputStream
-import java.io.FileNotFoundException
 import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStreamReader
 import kotlin.math.max
 import kotlin.system.exitProcess
 
-/**
- */
 object Main {
     private const val HELP_SHOWN = 1
     private const val GENERAL_ERROR = 2
 
-    private val opts = Options()
-    private const val XML_INPUT = "x"
-    private const val SERIALIZED_INPUT = "s"
-    private const val WRITE_OUTPUT = "o"
-    private const val DISPLAY_HELP = "h"
-    private const val INTERACTIVE_MODE = "i"
-    private const val BENCHMARK_MODE = "b"
-    private const val ENGLISH_WIKI_TEST = "t"
-
-    init {
-        opts.addOption(XML_INPUT, true, "Input WikiMedia XML file")
-        opts.addOption(SERIALIZED_INPUT, true, "Input serialized graph file")
-        opts.addOption(WRITE_OUTPUT, true, "Output file for serialized graph")
-        opts.addOption(DISPLAY_HELP, false, "Print help")
-
-        val group = OptionGroup()
-        group.addOption(Option(INTERACTIVE_MODE, "Use interactive mode"))
-        group.addOption(Option(BENCHMARK_MODE, "Run benchmarks"))
-        group.addOption(
-            Option(
-                ENGLISH_WIKI_TEST,
-                "Run benchmarks and test results against known result in English Wikipedia"
-            )
-        )
-        opts.addOptionGroup(group)
-    }
-
-    fun parseOptions(args: Array<String>): CommandLine {
-        val parser: CommandLineParser = DefaultParser()
-        try {
-            return parser.parse(opts, args)
-        } catch (e: ParseException) {
-            System.err.println(e.message)
-            printHelp()
-            exitProcess(HELP_SHOWN)
-        }
-    }
-
-    private fun printHelp() {
-        for (tmp in opts.options) {
-            val opt = tmp as Option
-            System.out.printf("  -%s        %s%n", opt.opt, opt.description)
-        }
-    }
-
     @JvmStatic
     fun main(args: Array<String>) {
-        val commandLine = checkNotNull(parseOptions(args))
-        if (commandLine.hasOption(DISPLAY_HELP) || commandLine.options.size == 0) {
-            printHelp()
+        if (args.isEmpty()) {
+            WikilinksCommand().main(arrayOf("--help"))
             exitProcess(HELP_SHOWN)
         }
-        val (inputFile, source) =
-            if (commandLine.hasOption(XML_INPUT)) {
-                File(commandLine.getOptionValue(XML_INPUT)) to Source.XML
-            } else if (commandLine.hasOption(SERIALIZED_INPUT)) {
-                File(commandLine.getOptionValue(SERIALIZED_INPUT)) to Source.SERIALIZED
-            } else {
-                null to Source.STDIN
+        WikilinksCommand().main(args)
+    }
+
+    private class WikilinksCommand : CliktCommand(name = "wikilinks") {
+        private val xmlInput by option("-x", "--xml", help = "Input WikiMedia XML file")
+            .file(canBeFile = true, canBeDir = false, mustExist = true, mustBeReadable = true)
+        private val serializedInput by option("-s", "--serialized", help = "Input serialized graph file")
+            .file(canBeFile = true, canBeDir = false, mustExist = true, mustBeReadable = true)
+        private val writeOutput by option("-o", "--output", help = "Output file for serialized graph")
+            .file(canBeFile = true, canBeDir = false)
+        private val interactiveMode by option("-i", "--interactive", help = "Use interactive mode").flag(default = false)
+        private val benchmarkMode by option("-b", "--benchmark", help = "Run benchmarks").flag(default = false)
+        private val englishWikiTest by option(
+            "-t",
+            "--wiki-test",
+            help = "Run benchmarks and test results against known result in English Wikipedia"
+        ).flag(default = false)
+
+        override fun run() {
+            if (xmlInput != null && serializedInput != null) {
+                throw ProgramResult(GENERAL_ERROR)
             }
-        val inputStream = if (inputFile == null) {
-            null
-        } else {
-            getInputStream(inputFile)
-        }
-        var outputFile: File? = null
-        if (commandLine.hasOption(WRITE_OUTPUT)) {
-            outputFile = File(commandLine.getOptionValue(WRITE_OUTPUT))
-        }
-        if (inputStream == null && source != Source.STDIN) {
-            System.err.printf("Cannot read file \"%s\". Exiting%n", inputFile)
-            exitProcess(1)
-        }
-        var mode = OperationMode.NONE
-        if (commandLine.hasOption(INTERACTIVE_MODE)) mode = OperationMode.INTERACTIVE
-        if (commandLine.hasOption(BENCHMARK_MODE)) mode = OperationMode.BENCHMARK
-        if (commandLine.hasOption(ENGLISH_WIKI_TEST)) mode = OperationMode.WIKI_TEST
-        if (mode == OperationMode.INTERACTIVE && source == Source.STDIN) {
-            System.err.println("Cannot have interactive mode when reading from STDIN")
-            exitProcess(1)
-        }
-        val exitValue = doRun(inputStream, inputFile, outputFile, source, mode)
-        exitProcess(exitValue)
-    }
 
-    private fun getInputStream(file: File): FileInputStream? {
-        return try {
-            FileInputStream(file)
-        } catch (_: FileNotFoundException) {
-            null
-        }
-    }
+            val selectedModeCount = listOf(interactiveMode, benchmarkMode, englishWikiTest).count { it }
+            if (selectedModeCount > 1) {
+                throw ProgramResult(GENERAL_ERROR)
+            }
 
-    private fun getOutputStream(file: File): FileOutputStream? {
-        return try {
-            FileOutputStream(file)
-        } catch (e: FileNotFoundException) {
-            null
+            val source = when {
+                xmlInput != null -> Source.XML
+                serializedInput != null -> Source.SERIALIZED
+                else -> Source.STDIN
+            }
+
+            val inputFile = xmlInput ?: serializedInput
+            val mode = when {
+                interactiveMode -> OperationMode.INTERACTIVE
+                benchmarkMode -> OperationMode.BENCHMARK
+                englishWikiTest -> OperationMode.WIKI_TEST
+                else -> OperationMode.NONE
+            }
+
+            if (mode == OperationMode.INTERACTIVE && source == Source.STDIN) {
+                System.err.println("Cannot have interactive mode when reading from STDIN")
+                throw ProgramResult(1)
+            }
+
+            val exitValue = doRun(inputFile, writeOutput, source, mode)
+            if (exitValue != 0) {
+                throw ProgramResult(exitValue)
+            }
         }
     }
 
-    private fun readXml(fis: FileInputStream, isBzipStream: Boolean): MutableList<BufferWikiPage> {
+    private fun readXml(inputFile: File, isBzipStream: Boolean): MutableList<BufferWikiPage> {
         try {
-            BufferedInputStream(fis).use { bis ->
-                val inputStream = if (isBzipStream) {
-                    BufferedInputStream(BZip2CompressorInputStream(bis, true))
-                } else {
-                    bis
+            inputFile.inputStream().use { fis ->
+                BufferedInputStream(fis).use { bis ->
+                    val inputStream = if (isBzipStream) {
+                        BufferedInputStream(BZip2CompressorInputStream(bis, true))
+                    } else {
+                        bis
+                    }
+                    return WikiProcessor.readPages(inputStream)
                 }
-                return WikiProcessor.readPages(inputStream)
             }
         } catch (e: IOException) {
             reportErrorAndExit(e)
         }
     }
 
-    private fun readFromSerialized(fis: FileInputStream): MutableList<BufferWikiPage> {
+    private fun readFromSerialized(inputFile: File): MutableList<BufferWikiPage> {
         try {
-            return BufferWikiSerialization().readFromSerialized(fis.getChannel())
+            inputFile.inputStream().use { fis ->
+                return BufferWikiSerialization().readFromSerialized(fis.channel)
+            }
         } catch (e: IOException) {
             reportErrorAndExit(e)
         }
     }
 
     private fun doRun(
-        input: FileInputStream?,
         inputFile: File?,
         outputFile: File?,
         source: Source,
@@ -174,29 +131,27 @@ object Main {
             }
         }
         if (exitValue != 0) return exitValue
+
         val loadStart = System.currentTimeMillis()
         val inputFileName = if (source == Source.STDIN) "<stdin>" else inputFile.toString()
         System.out.printf("Starting to read %s%n", inputFileName)
         val pages = when (source) {
             Source.XML -> {
-                readXml(input!!, inputFile!!.getName().endsWith(".bz2"))
-                    .also {
-                        it.sort()
-                    }
+                readXml(checkNotNull(inputFile), inputFile.name.endsWith(".bz2"))
+                    .also { it.sort() }
             }
 
             Source.SERIALIZED -> {
-                readFromSerialized(input!!)
+                readFromSerialized(checkNotNull(inputFile))
             }
 
             Source.STDIN -> {
                 WikiProcessor.readPages(stdin)
-                    .also {
-                        it.sort()
-                    }
+                    .also { it.sort() }
             }
         }
         System.out.printf("Read %s in %d ms%n", inputFileName, System.currentTimeMillis() - loadStart)
+
         if (fos != null) {
             val writeStart = System.currentTimeMillis()
             System.out.printf("Starting to write output to %s%n", outputFile)
@@ -210,6 +165,7 @@ object Main {
             System.out.printf("Finished in %d ms%n", System.currentTimeMillis() - writeStart)
         }
         if (exitValue != 0) return exitValue
+
         when (mode) {
             OperationMode.INTERACTIVE -> try {
                 InputStreamReader(stdin).use { ir ->
@@ -220,12 +176,20 @@ object Main {
             } catch (e: IOException) {
                 reportErrorAndExit(e)
             }
+
             OperationMode.BENCHMARK -> Benchmarking.runBenchmarks(pages, 50)
             OperationMode.WIKI_TEST -> Benchmarking.runBenchmarksAndTest(pages)
-
             OperationMode.NONE -> {}
         }
         return exitValue
+    }
+
+    private fun getOutputStream(file: File): FileOutputStream? {
+        return try {
+            FileOutputStream(file)
+        } catch (_: IOException) {
+            null
+        }
     }
 
     @Throws(IOException::class)
@@ -263,7 +227,7 @@ object Main {
         var titleTotal: Long = 0
         var longestTitle: Long = -1
         var largestLinkCount: Long = -1
-        var pageCount: Long  = 0
+        var pageCount: Long = 0
         for (page in pages) {
             pageCount++
             largestId = max(largestId, page.getId().toLong())
@@ -292,11 +256,11 @@ object Main {
 
     @Throws(IOException::class)
     private fun writeTo(fos: FileOutputStream, pages: MutableList<BufferWikiPage>) {
-        if (!pages.isEmpty()) {
+        if (pages.isNotEmpty()) {
             val serializer = BufferWikiSerialization()
-            serializer.serialize(pages, fos.getChannel())
+            serializer.serialize(pages, fos.channel)
         }
-        fos.getFD().sync()
+        fos.fd.sync()
         fos.flush()
         fos.close()
     }
