@@ -8,7 +8,6 @@
 plugins {
     // Apply the org.jetbrains.kotlin.jvm Plugin to add support for Kotlin.
     alias(libs.plugins.kotlin.jvm)
-    alias(libs.plugins.kotlin.serialization)
 
     // Apply the application plugin to add support for building a CLI application in Java.
     application
@@ -35,7 +34,7 @@ dependencies {
     implementation(libs.bliki)
     implementation(libs.logback)
     implementation(libs.findbugs)
-    implementation(libs.kotlinx.serialization.protobuf)
+    implementation(libs.flatbuffers)
 }
 
 // Apply a specific Java toolchain to ease working on different environments.

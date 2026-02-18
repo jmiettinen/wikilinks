@@ -6,30 +6,27 @@ guava = "33.4.5-jre"
 junit-jupiter = "5.12.1"
 logback = "1.1.6"
 findbugs = "3.0.1"
-commons-cli = "1.3.1"
 clikt = "5.0.3"
 commons-compress = "1.27.1"
 bliki = "3.1.0"
 koloboke = "0.6.8"
 jgrapht = "0.9.1"
 kotest = "5.9.1"
-kotlinx-serialization = "1.8.1"
+flatbuffers = "24.3.25"
 
 [libraries]
 guava = { module = "com.google.guava:guava", version.ref = "guava" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit-jupiter" }
 logback = { module = "ch.qos.logback:logback-classic", version.ref = "logback" }
 findbugs = { module = "com.google.code.findbugs:jsr305", version.ref = "findbugs" }
-commons-cli = { module = "commons-cli:commons-cli", version.ref = "commons-cli"}
 clikt = { module = "com.github.ajalt.clikt:clikt", version.ref = "clikt" }
 bliki = { module = "info.bliki.wiki:bliki-core", version.ref = "bliki" }
 koloboke-impl = { module = "net.openhft:koloboke-impl-jdk8", version.ref = "koloboke" }
 commons-compress = { module = "org.apache.commons:commons-compress", version.ref = "commons-compress" }
 jgrapht = { module = "org.jgrapht:jgrapht-core", version.ref = "jgrapht" }
 kotest-assertions = { module = "io.kotest:kotest-assertions-core", version.ref = "kotest" }
-kotlinx-serialization-protobuf = { module = "org.jetbrains.kotlinx:kotlinx-serialization-protobuf", version.ref = "kotlinx-serialization" }
+flatbuffers = { module = "com.google.flatbuffers:flatbuffers-java", version.ref = "flatbuffers" }
 
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version = "2.1.20" }
-kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version = "2.1.20" }
