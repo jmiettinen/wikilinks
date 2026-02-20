@@ -133,7 +133,7 @@ class WikiRoutes(pages: List<BufferWikiPage>) {
                 var reverseLinkerCount = 0
                 visitLinkArray(
                     links
-                ) { linkerId: Int, linkCount: Int, firstLinkIndex: Int, firstPastLastLinkIndex: Int ->
+                ) { _: Int, _: Int, firstLinkIndex: Int, firstPastLastLinkIndex: Int ->
                     for (i in firstLinkIndex..<firstPastLastLinkIndex) {
                         val targetId = links[i]
                         reverseCounts.addValue(targetId, 1, 0)

@@ -3,104 +3,200 @@ package fi.eonwe.wikilinks
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.ProgramResult
 import com.github.ajalt.clikt.core.main
+import com.github.ajalt.clikt.core.subcommands
+import com.github.ajalt.clikt.parameters.options.default
 import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.types.file
 import fi.eonwe.wikilinks.leanpages.BufferWikiPage
 import fi.eonwe.wikilinks.leanpages.BufferWikiSerialization
-import fi.eonwe.wikilinks.leanpages.LeanWikiPage
-import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream
+import fi.eonwe.wikilinks.segmentgraph.SegmentWikiGraphSerialization
+import fi.eonwe.wikilinks.segmentgraph.SegmentWikiRoutes
+import fi.eonwe.wikilinks.utils.Helpers
 import java.io.BufferedInputStream
 import java.io.BufferedReader
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStreamReader
-import kotlin.math.max
+import java.nio.channels.FileChannel
+import java.nio.file.StandardOpenOption
 import kotlin.system.exitProcess
 
 object Main {
     private const val HELP_SHOWN = 1
     private const val GENERAL_ERROR = 2
+    private const val DEFAULT_BENCHMARK_MEASUREMENTS = 50
+
+    private enum class GraphFormat {
+        BUFFER,
+        SEGMENT
+    }
 
     @JvmStatic
     fun main(args: Array<String>) {
+        val root = WikilinksCommand()
         if (args.isEmpty()) {
-            WikilinksCommand().main(arrayOf("--help"))
+            root.main(arrayOf("--help"))
             exitProcess(HELP_SHOWN)
         }
-        WikilinksCommand().main(args)
+        root.main(args)
     }
 
     private class WikilinksCommand : CliktCommand(name = "wikilinks") {
+        init {
+            subcommands(ConvertCommand(), QueryCommand())
+        }
+
+        override fun run() = Unit
+    }
+
+    private class ConvertCommand : CliktCommand(name = "convert") {
         private val xmlInput by option("-x", "--xml", help = "Input WikiMedia XML file")
-            .file(canBeFile = true, canBeDir = false, mustExist = true, mustBeReadable = true)
-        private val serializedInput by option("-s", "--serialized", help = "Input serialized graph file")
-            .file(canBeFile = true, canBeDir = false, mustExist = true, mustBeReadable = true)
-        private val writeOutput by option("-o", "--output", help = "Output file for serialized graph")
-            .file(canBeFile = true, canBeDir = false)
-        private val interactiveMode by option("-i", "--interactive", help = "Use interactive mode").flag(default = false)
-        private val benchmarkMode by option("-b", "--benchmark", help = "Run benchmarks").flag(default = false)
-        private val englishWikiTest by option(
-            "-t",
-            "--wiki-test",
-            help = "Run benchmarks and test results against known result in English Wikipedia"
-        ).flag(default = false)
+            .file(canBeFile = true, canBeDir = false, mustExist = true, mustBeReadable = true, mustBeWritable = false)
+        private val writeOutput by option("-o", "--output", help = "Output serialized graph file")
+            .file(canBeFile = true, canBeDir = false, mustBeWritable = false)
+        private val indexInput by option("--index", help = "Input multistream index file (.txt.bz2)")
+            .file(canBeFile = true, canBeDir = false, mustExist = true, mustBeReadable = true, mustBeWritable = false)
+        private val noIndex by option("--no-index", help = "Disable index usage for .bz2 XML input")
+            .flag(default = false)
+        private val formatName by option(
+            "--format",
+            help = "Output format: buffer | segment"
+        ).default("buffer")
 
         override fun run() {
-            if (xmlInput != null && serializedInput != null) {
+            val inputFile = xmlInput ?: throw ProgramResult(GENERAL_ERROR)
+            val outputFile = writeOutput ?: throw ProgramResult(GENERAL_ERROR)
+            if (indexInput != null && noIndex) {
+                System.err.println("Cannot use --index and --no-index together")
+                throw ProgramResult(GENERAL_ERROR)
+            }
+            if ((indexInput != null || noIndex) && !inputFile.name.endsWith(".bz2")) {
+                System.err.println("--index and --no-index are only valid for .bz2 XML input")
+                throw ProgramResult(GENERAL_ERROR)
+            }
+            if (outputFile.exists()) {
+                System.err.printf("File %s already exists. Exiting%n", outputFile)
                 throw ProgramResult(GENERAL_ERROR)
             }
 
-            val selectedModeCount = listOf(interactiveMode, benchmarkMode, englishWikiTest).count { it }
-            if (selectedModeCount > 1) {
-                throw ProgramResult(GENERAL_ERROR)
-            }
+            val format = parseFormat(formatName)
+            val loadStart = System.currentTimeMillis()
+            System.out.printf("Starting to read %s%n", inputFile)
+            val pages = readXml(inputFile, inputFile.name.endsWith(".bz2"), indexInput, noIndex).also { it.sort() }
+            System.out.printf("Read %s in %d ms%n", inputFile, System.currentTimeMillis() - loadStart)
 
-            val source = when {
-                xmlInput != null -> Source.XML
-                serializedInput != null -> Source.SERIALIZED
-                else -> Source.STDIN
-            }
+            val writeStart = System.currentTimeMillis()
+            System.out.printf("Starting to write output to %s (%s)%n", outputFile, format.name.lowercase())
+            writeTo(outputFile, pages, format)
+            System.out.printf("Finished in %d ms%n", System.currentTimeMillis() - writeStart)
+        }
+    }
 
-            val inputFile = xmlInput ?: serializedInput
-            val mode = when {
-                interactiveMode -> OperationMode.INTERACTIVE
-                benchmarkMode -> OperationMode.BENCHMARK
-                englishWikiTest -> OperationMode.WIKI_TEST
-                else -> OperationMode.NONE
-            }
+    private class QueryCommand : CliktCommand(name = "query") {
+        private val serializedInput by option("-s", "--serialized", help = "Input serialized graph file")
+            .file(canBeFile = true, canBeDir = false, mustExist = true, mustBeReadable = true, mustBeWritable = false)
+        private val benchmarkMode by option("-b", "--benchmark", help = "Run benchmark mode").flag(default = false)
+        private val formatName by option(
+            "--format",
+            help = "Input format: buffer | segment"
+        ).default("buffer")
 
-            if (mode == OperationMode.INTERACTIVE && source == Source.STDIN) {
-                System.err.println("Cannot have interactive mode when reading from STDIN")
-                throw ProgramResult(1)
-            }
+        override fun run() {
+            val inputFile = serializedInput ?: throw ProgramResult(GENERAL_ERROR)
+            val format = parseFormat(formatName)
+            when (format) {
+                GraphFormat.BUFFER -> {
+                    val pages = readBufferSerialized(inputFile)
+                    runQueryModeForPages(pages, benchmarkMode)
+                }
 
-            val exitValue = doRun(inputFile, writeOutput, source, mode)
-            if (exitValue != 0) {
-                throw ProgramResult(exitValue)
+                GraphFormat.SEGMENT -> {
+                    SegmentWikiGraphSerialization.open(inputFile.toPath()).use { store ->
+                        val routes = SegmentWikiRoutes(store)
+                        runQueryModeForSegment(routes, benchmarkMode)
+                    }
+                }
             }
         }
     }
 
-    private fun readXml(inputFile: File, isBzipStream: Boolean): MutableList<BufferWikiPage> {
+    private fun parseFormat(name: String): GraphFormat {
+        return when (name.lowercase()) {
+            "buffer" -> GraphFormat.BUFFER
+            "segment" -> GraphFormat.SEGMENT
+            else -> {
+                System.err.println("Unknown format '$name'. Expected one of: buffer, segment")
+                throw ProgramResult(GENERAL_ERROR)
+            }
+        }
+    }
+
+    private fun runQueryModeForPages(pages: MutableList<BufferWikiPage>, benchmarkMode: Boolean) {
+        if (benchmarkMode) {
+            Benchmarking.runBenchmarks(pages, DEFAULT_BENCHMARK_MEASUREMENTS)
+            return
+        }
+        InputStreamReader(System.`in`).use { ir ->
+            BufferedReader(ir).use { br ->
+                doInteractive(pages, br)
+            }
+        }
+    }
+
+    private fun runQueryModeForSegment(routes: SegmentWikiRoutes, benchmarkMode: Boolean) {
+        if (benchmarkMode) {
+            runSegmentBenchmarks(routes, DEFAULT_BENCHMARK_MEASUREMENTS)
+            return
+        }
+        InputStreamReader(System.`in`).use { ir ->
+            BufferedReader(ir).use { br ->
+                doInteractiveSegment(routes, br)
+            }
+        }
+    }
+
+    private fun printReadStats(result: WikiProcessor.ReadPagesResult) {
+        println("Before redirect cleanup:")
+        WikiProcessor.printStatistics(result.beforeRedirectCleanup)
+        println("After redirect cleanup:")
+        WikiProcessor.printStatistics(result.afterRedirectCleanup)
+    }
+
+    private fun readXml(
+        inputFile: File,
+        isBzipStream: Boolean,
+        indexInput: File?,
+        noIndex: Boolean
+    ): MutableList<BufferWikiPage> {
         try {
-            inputFile.inputStream().use { fis ->
-                BufferedInputStream(fis).use { bis ->
-                    val inputStream = if (isBzipStream) {
-                        BufferedInputStream(BZip2CompressorInputStream(bis, true))
-                    } else {
-                        bis
+            val result = if (isBzipStream) {
+                val indexSelection = when {
+                    noIndex -> WikiReader.IndexSelection.DISABLED
+                    indexInput != null -> WikiReader.IndexSelection.EXPLICIT
+                    else -> WikiReader.IndexSelection.AUTO
+                }
+                WikiReader.readPagesWithStats(
+                    source = FileCompressedSource(inputFile.toPath()),
+                    indexSelection = indexSelection,
+                    explicitIndexPath = indexInput?.toPath()
+                )
+            } else {
+                inputFile.inputStream().use { fis ->
+                    BufferedInputStream(fis).use { bis ->
+                        WikiProcessor.readPagesWithStats(bis)
                     }
-                    return WikiProcessor.readPages(inputStream)
                 }
             }
+            printReadStats(result)
+            return result.pages
         } catch (e: IOException) {
             reportErrorAndExit(e)
         }
     }
 
-    private fun readFromSerialized(inputFile: File): MutableList<BufferWikiPage> {
+    private fun readBufferSerialized(inputFile: File): MutableList<BufferWikiPage> {
         try {
             inputFile.inputStream().use { fis ->
                 return BufferWikiSerialization().readFromSerialized(fis.channel)
@@ -110,166 +206,140 @@ object Main {
         }
     }
 
-    private fun doRun(
-        inputFile: File?,
-        outputFile: File?,
-        source: Source,
-        mode: OperationMode
-    ): Int {
-        val stdin = System.`in`
-        var fos: FileOutputStream? = null
-        var exitValue = 0
-        if (outputFile != null) {
-            if (outputFile.exists()) {
-                System.err.printf("File %s already exists. Exiting%n", outputFile)
-                exitValue = GENERAL_ERROR
-            }
-            fos = getOutputStream(outputFile)
-            if (fos == null) {
-                System.err.printf("Cannot open file %s for writing. Exiting%n", outputFile)
-                exitValue = GENERAL_ERROR
-            }
-        }
-        if (exitValue != 0) return exitValue
-
-        val loadStart = System.currentTimeMillis()
-        val inputFileName = if (source == Source.STDIN) "<stdin>" else inputFile.toString()
-        System.out.printf("Starting to read %s%n", inputFileName)
-        val pages = when (source) {
-            Source.XML -> {
-                readXml(checkNotNull(inputFile), inputFile.name.endsWith(".bz2"))
-                    .also { it.sort() }
+    @Throws(IOException::class)
+    private fun writeTo(outputFile: File, pages: MutableList<BufferWikiPage>, format: GraphFormat) {
+        when (format) {
+            GraphFormat.BUFFER -> FileOutputStream(outputFile).use { fos ->
+                BufferWikiSerialization().serialize(pages, fos.channel)
+                fos.fd.sync()
             }
 
-            Source.SERIALIZED -> {
-                readFromSerialized(checkNotNull(inputFile))
+            GraphFormat.SEGMENT -> FileChannel.open(
+                outputFile.toPath(),
+                StandardOpenOption.CREATE_NEW,
+                StandardOpenOption.WRITE
+            ).use { fc ->
+                SegmentWikiGraphSerialization().serialize(pages, fc)
             }
-
-            Source.STDIN -> {
-                WikiProcessor.readPages(stdin)
-                    .also { it.sort() }
-            }
-        }
-        System.out.printf("Read %s in %d ms%n", inputFileName, System.currentTimeMillis() - loadStart)
-
-        if (fos != null) {
-            val writeStart = System.currentTimeMillis()
-            System.out.printf("Starting to write output to %s%n", outputFile)
-            try {
-                writeTo(fos, pages)
-            } catch (e: IOException) {
-                System.err.println("Encountered an error:")
-                e.printStackTrace()
-                exitValue = GENERAL_ERROR
-            }
-            System.out.printf("Finished in %d ms%n", System.currentTimeMillis() - writeStart)
-        }
-        if (exitValue != 0) return exitValue
-
-        when (mode) {
-            OperationMode.INTERACTIVE -> try {
-                InputStreamReader(stdin).use { ir ->
-                    BufferedReader(ir).use { br ->
-                        doInteractive(pages, br)
-                    }
-                }
-            } catch (e: IOException) {
-                reportErrorAndExit(e)
-            }
-
-            OperationMode.BENCHMARK -> Benchmarking.runBenchmarks(pages, 50)
-            OperationMode.WIKI_TEST -> Benchmarking.runBenchmarksAndTest(pages)
-            OperationMode.NONE -> {}
-        }
-        return exitValue
-    }
-
-    private fun getOutputStream(file: File): FileOutputStream? {
-        return try {
-            FileOutputStream(file)
-        } catch (_: IOException) {
-            null
         }
     }
 
     @Throws(IOException::class)
     private fun doInteractive(pages: List<BufferWikiPage>, console: BufferedReader) {
         println("Starting interactive mode")
-
         val initStart = System.currentTimeMillis()
         val routes = WikiRoutes(pages)
         System.out.printf("Initializing routes took %d ms%n", System.currentTimeMillis() - initStart)
         Interactive.doSearch(routes, console)
     }
 
-    private fun printStatistics(pages: Iterable<LeanWikiPage<*>>) {
-        val statistics = reportStatistics(pages)
-        System.out.printf("There are %d pages in total%n", statistics.totalPageCount)
-        System.out.printf("The largest id found is %d%n", statistics.largestId)
-        System.out.printf("There are %d links in total%n", statistics.totalLinkCount)
-        System.out.printf("The largest amount of links found is %d%n", statistics.largestLinkCount)
-        System.out.printf("Total length of the titles is %d bytes%n", statistics.titleTotal)
-        System.out.printf("The longest title is %d bytes%n", statistics.longestTitle)
+    @Throws(IOException::class)
+    private fun doInteractiveSegment(routes: SegmentWikiRoutes, console: BufferedReader) {
+        println("Starting interactive mode")
+        while (true) {
+            val start = findTargetSegment(routes, console, true) ?: return
+            val end = findTargetSegment(routes, console, false) ?: return
+            try {
+                val startTime = System.currentTimeMillis()
+                val route = routes.findRoute(start, end)
+                val elapsed = System.currentTimeMillis() - startTime
+                val routeString = if (route.isEmpty()) "No route found" else "Route: " + route.joinToString(" -> ") { Helpers.quote(it) }
+                System.out.printf("%s (in %d ms)%n", routeString, elapsed)
+            } catch (e: BadRouteException) {
+                val message = when {
+                    !e.startExists() && !e.endExist() -> "Neither start point ${e.startName} or end point ${e.endName} do exist"
+                    !e.startExists() -> "Starting point ${e.startName} does not exists"
+                    !e.endExist() -> "End point ${e.endName} does not exists"
+                    else -> "No route found between ${e.startName} and ${e.endName}"
+                }
+                System.out.printf("%s%n", message)
+            } catch (e: RuntimeException) {
+                System.out.printf("<ERROR>: %s%n", e.message)
+            }
+        }
     }
 
-    data class Statistics(
-        val largestId: Long,
-        val totalLinkCount: Long,
-        val largestLinkCount: Long,
-        val titleTotal: Long,
-        val longestTitle: Long,
-        val totalPageCount: Long,
-    )
-
-    fun reportStatistics(pages: Iterable<LeanWikiPage<*>>): Statistics {
-        var largestId: Long = -1
-        var linkCount: Long = 0
-        var titleTotal: Long = 0
-        var longestTitle: Long = -1
-        var largestLinkCount: Long = -1
-        var pageCount: Long = 0
-        for (page in pages) {
-            pageCount++
-            largestId = max(largestId, page.getId().toLong())
-            val thisLinkCount = page.getLinkCount().toLong()
-            largestLinkCount = max(largestLinkCount, thisLinkCount)
-            linkCount += thisLinkCount
-            val thisPageTitleLength = page.getTitleLength().toLong()
-            longestTitle = max(longestTitle, thisPageTitleLength)
-            titleTotal += thisPageTitleLength
-        }
-        return Statistics(
-            totalPageCount = pageCount,
-            largestId = largestId,
-            totalLinkCount = linkCount,
-            largestLinkCount = largestLinkCount,
-            titleTotal = titleTotal,
-            longestTitle = longestTitle
+    @Throws(IOException::class)
+    private fun findTargetSegment(routes: SegmentWikiRoutes, reader: BufferedReader, startPoint: Boolean): String? {
+        val wildcard = "#"
+        val randomPage = "<"
+        System.out.printf(
+            "Please type the %s article ('<' for random article and '#' for wildcard)",
+            if (startPoint) "starting" else "end"
         )
+        while (true) {
+            print("> ")
+            val trimmed = (reader.readLine() ?: "").trim()
+            if (trimmed == wildcard) {
+                System.out.printf("Must have at last one char before the wildcards%n")
+            } else if (trimmed.endsWith(wildcard)) {
+                val prefix = trimmed.dropLast(1)
+                val matches = routes.findWildcards(prefix, 10)
+                if (matches.isEmpty()) {
+                    System.out.printf("No articles start with %s%n", Helpers.quote(prefix))
+                } else {
+                    System.out.printf("At least these articles start with %s: %s%n", Helpers.quote(prefix), matches.joinToString())
+                }
+            } else if (trimmed == randomPage) {
+                val page = routes.randomPage()
+                System.out.printf("Selected \"%s\" as %s page%n", page, if (startPoint) "starting" else "end")
+                return page
+            } else if (trimmed.isNotEmpty() && routes.hasPage(trimmed)) {
+                return trimmed
+            } else {
+                System.out.printf("No page with name %s found. Try wildcards?%n", Helpers.quote(trimmed))
+            }
+        }
+    }
+
+    private fun runSegmentBenchmarks(routes: SegmentWikiRoutes, measurements: Int) {
+        val runtimes = LongArray(measurements)
+        System.out.printf("Running %d random measurements%n", measurements)
+        for (i in 0 until measurements) {
+            val p1 = routes.randomPage() ?: break
+            val p2 = routes.randomPage() ?: break
+            val startTime = System.currentTimeMillis()
+            try {
+                System.out.printf("Finding route %s -> %s%n", Helpers.quote(p1), Helpers.quote(p2))
+                val route = routes.findRoute(p1, p2)
+                val totalTime = System.currentTimeMillis() - startTime
+                System.out.printf("%s (%d ms)%n", if (route.isEmpty()) "Found no route" else "Found route ${route.joinToString(" -> ")}", totalTime)
+                runtimes[i] = totalTime
+            } catch (_: BadRouteException) {
+            }
+        }
+        printBenchmarkStats(runtimes)
+    }
+
+    private fun printBenchmarkStats(runtimes: LongArray) {
+        var n = 0
+        var mean = 0.0
+        var m2 = 0.0
+        var min = Double.POSITIVE_INFINITY
+        var max = Double.NEGATIVE_INFINITY
+        var sum = 0.0
+        for (xLong in runtimes) {
+            val x = xLong.toDouble()
+            n++
+            if (x < min) min = x
+            if (x > max) max = x
+            sum += x
+            val delta = x - mean
+            mean += delta / n
+            m2 += delta * (x - mean)
+        }
+        val stddev = if (n < 2) 0.0 else kotlin.math.sqrt(m2 / (n - 1))
+        System.out.printf("Runs      : %d%n", n)
+        System.out.printf("Min       : %010.2f%n", min)
+        System.out.printf("Max       : %010.2f%n", max)
+        System.out.printf("Mean      : %010.2f%n", mean)
+        System.out.printf("Std. dev. : %010.2f%n", stddev)
+        System.out.printf("Sum       : %010.2f%n", sum)
     }
 
     fun reportErrorAndExit(t: Throwable): Nothing {
         System.err.printf("Encountered error %s. Exiting%n", t.message)
         t.printStackTrace()
         exitProcess(1)
-    }
-
-    @Throws(IOException::class)
-    private fun writeTo(fos: FileOutputStream, pages: MutableList<BufferWikiPage>) {
-        if (pages.isNotEmpty()) {
-            val serializer = BufferWikiSerialization()
-            serializer.serialize(pages, fos.channel)
-        }
-        fos.fd.sync()
-        fos.flush()
-        fos.close()
-    }
-
-    private enum class Source {
-        XML, SERIALIZED, STDIN
-    }
-
-    private enum class OperationMode {
-        NONE, INTERACTIVE, BENCHMARK, WIKI_TEST
     }
 }

@@ -12,7 +12,6 @@ bliki = "3.1.0"
 koloboke = "0.6.8"
 jgrapht = "0.9.1"
 kotest = "5.9.1"
-flatbuffers = "24.3.25"
 
 [libraries]
 guava = { module = "com.google.guava:guava", version.ref = "guava" }
@@ -25,8 +24,8 @@ koloboke-impl = { module = "net.openhft:koloboke-impl-jdk8", version.ref = "kolo
 commons-compress = { module = "org.apache.commons:commons-compress", version.ref = "commons-compress" }
 jgrapht = { module = "org.jgrapht:jgrapht-core", version.ref = "jgrapht" }
 kotest-assertions = { module = "io.kotest:kotest-assertions-core", version.ref = "kotest" }
-flatbuffers = { module = "com.google.flatbuffers:flatbuffers-java", version.ref = "flatbuffers" }
 
 
 [plugins]
-kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version = "2.1.20" }
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version = "2.3.10" }
+shadow = { id = "com.github.johnrengelman.shadow", version = "8.1.1" }

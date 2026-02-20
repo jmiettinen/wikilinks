@@ -9,20 +9,27 @@ import info.bliki.wiki.dump.WikiPatternMatcher
 import info.bliki.wiki.dump.WikiXMLParser
 import net.openhft.koloboke.collect.map.hash.HashObjObjMap
 import net.openhft.koloboke.collect.map.hash.HashObjObjMaps
-import org.apache.commons.io.input.CloseShieldInputStream
-import org.xml.sax.SAXException
-import java.io.BufferedInputStream
-import java.io.ByteArrayOutputStream
-import java.io.IOException
 import java.io.InputStream
-import java.nio.ByteBuffer
 import java.util.Arrays
 import java.util.IdentityHashMap
-import kotlin.math.min
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  */
 class WikiProcessor private constructor() {
+    data class GraphStatistics(
+        val articleCount: Int,
+        val redirectCount: Int,
+        val linkCount: Int,
+        val nullLinkCount: Int
+    )
+
+    data class ReadPagesResult(
+        val pages: MutableList<BufferWikiPage>,
+        val beforeRedirectCleanup: GraphStatistics,
+        val afterRedirectCleanup: GraphStatistics
+    )
+
     fun preProcess(input: InputStream): HashObjObjMap<String, PagePointer> {
         val titleToPage = HashObjObjMaps.newMutableMap<String, PagePointer>(12000000)
         var nextInternalId = 0
@@ -34,54 +41,75 @@ class WikiProcessor private constructor() {
             return nextInternalId++
         }
 
-        try {
-            val parser = WikiXMLParser(input) { article, siteinfo ->
-                if (article.isMain) {
-                    val text = article.text ?: ""
-                    val matcher = WikiPatternMatcher(text)
-                    // Wikimedia page ids can be larger than Int. We use a compact internal id instead.
-                    val id = nextPageId()
-                    if (matcher.isRedirect) {
-                        val page = WikiRedirectPage(article.title, id, matcher.redirectText)
-                        fixPagePointers(titleToPage, page)
-                    } else {
-                        val links = matcher.links.asSequence()
-                            .map { linkName -> possiblyCapitalize(linkName) }
-                            .distinct()
-                        val pointerLinks = buildList {
-                            links.forEach { link ->
-                                var ptr = titleToPage[link]
-                                if (ptr == null) {
-                                    ptr = PagePointer(null)
-                                    titleToPage[link] = ptr
-                                }
-                                add(ptr)
+        val parser = WikiXMLParser(input) { article, siteinfo ->
+            if (article.isMain) {
+                val text = article.text ?: ""
+                val matcher = WikiPatternMatcher(text)
+                // Wikimedia page ids can be larger than Int. We use a compact internal id instead.
+                val id = nextPageId()
+                if (matcher.isRedirect) {
+                    val page = WikiRedirectPage(article.title, id, matcher.redirectText)
+                    fixPagePointers(titleToPage, page)
+                } else {
+                    val links = matcher.links.asSequence()
+                        .map { linkName -> possiblyCapitalize(linkName) }
+                        .distinct()
+                    val pointerLinks = buildList {
+                        links.forEach { link ->
+                            var ptr = titleToPage[link]
+                            if (ptr == null) {
+                                ptr = PagePointer(null)
+                                titleToPage[link] = ptr
                             }
+                            add(ptr)
                         }
-                        val page = WikiPageData(article.title, id, pointerLinks)
-                        fixPagePointers(titleToPage, page)
                     }
+                    val page = WikiPageData(article.title, id, pointerLinks)
+                    fixPagePointers(titleToPage, page)
                 }
             }
-            parser.parse()
-            return titleToPage
-        } catch (_: SAXException) {
-            return titleToPage
-        } catch (_: IOException) {
-            return titleToPage
         }
+        parser.parse()
+        return titleToPage
     }
 
     companion object {
+        private val xmlLimitsConfigured = AtomicBoolean(false)
+
+        private fun configureXmlParserLimitsForTrustedWikiDump() {
+            if (!xmlLimitsConfigured.compareAndSet(false, true)) {
+                return
+            }
+            // Allow very large trusted Wikimedia dumps to parse without JAXP default caps.
+            setSystemPropertyIfMissing("jdk.xml.totalEntitySizeLimit", "0")
+            setSystemPropertyIfMissing("jdk.xml.entityExpansionLimit", "0")
+            setSystemPropertyIfMissing("jdk.xml.maxGeneralEntitySizeLimit", "0")
+            setSystemPropertyIfMissing("jdk.xml.maxParameterEntitySizeLimit", "0")
+        }
+
+        private fun setSystemPropertyIfMissing(name: String, value: String) {
+            if (System.getProperty(name).isNullOrBlank()) {
+                System.setProperty(name, value)
+            }
+        }
 
         fun readPages(input: InputStream): MutableList<BufferWikiPage> {
+            return readPagesWithStats(input).pages
+        }
+
+        fun readPagesWithStats(input: InputStream): ReadPagesResult {
+            configureXmlParserLimitsForTrustedWikiDump()
             val processor = WikiProcessor()
             val pages = processor.preProcess(input)
-//            printStatistics(pages)
+            val before = gatherStatistics(pages)
             dropRedirectLoops(pages)
-//            printStatistics(pages)
+            val after = gatherStatistics(pages)
             val packedPages = packPages(pages)
-            return packedPages
+            return ReadPagesResult(
+                pages = packedPages,
+                beforeRedirectCleanup = before,
+                afterRedirectCleanup = after
+            )
         }
 
         private fun possiblyCapitalize(linkName: String): String {
@@ -144,7 +172,7 @@ class WikiProcessor private constructor() {
             }
         }
 
-        fun printStatistics(map: MutableMap<String?, PagePointer>) {
+        fun gatherStatistics(map: MutableMap<String?, PagePointer>): GraphStatistics {
             var articleCount = 0
             var redirectCount = 0
             var linkCount = 0
@@ -170,14 +198,27 @@ class WikiProcessor private constructor() {
                     }
                 }
             }
+            return GraphStatistics(
+                articleCount = articleCount,
+                redirectCount = redirectCount,
+                linkCount = linkCount,
+                nullLinkCount = nullLinkCount
+            )
+        }
+
+        fun printStatistics(map: MutableMap<String?, PagePointer>) {
+            printStatistics(gatherStatistics(map))
+        }
+
+        fun printStatistics(stats: GraphStatistics) {
             System.out.printf(
                 "Articles: %d%n" +
                         "Redirects: %d%n" +
                         "Links: %d (/ article: %.2f)%n" +
                         "Null links %d%n",
-                articleCount, redirectCount,
-                linkCount, linkCount / articleCount.toDouble(),
-                nullLinkCount
+                stats.articleCount, stats.redirectCount,
+                stats.linkCount, stats.linkCount / stats.articleCount.toDouble(),
+                stats.nullLinkCount
             )
         }
 

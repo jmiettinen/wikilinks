@@ -21,6 +21,9 @@ object TestHelper {
 private const val SILESIAN = "/szlwiki-20190801-pages-articles-multistream.xml.bz2"
 private const val FAROESE = "/fowiki-20260201-pages-articles-multistream.xml.bz2"
 
+private const val NEW_SILESIAN = "/szlwiki-20260201-pages-articles-multistream.xml.bz2"
+private const val NEW_SILESIAN_INDEX = "/szlwiki-20260201-pages-articles-multistream-index.txt.bz2"
+
 sealed interface TestData {
     val name: String
 
@@ -32,6 +35,18 @@ sealed interface TestData {
     data object Faroese: TestData {
         override val name: String
             get() = FAROESE
+
+    }
+
+    data object NewSilesian: TestData {
+        override val name: String
+            get() = NEW_SILESIAN
+
+    }
+
+    data object NewSilesianIndex: TestData {
+        override val name: String
+            get() = NEW_SILESIAN_INDEX
 
     }
 

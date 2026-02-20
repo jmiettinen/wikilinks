@@ -8,6 +8,7 @@
 plugins {
     // Apply the org.jetbrains.kotlin.jvm Plugin to add support for Kotlin.
     alias(libs.plugins.kotlin.jvm)
+    alias(libs.plugins.shadow)
 
     // Apply the application plugin to add support for building a CLI application in Java.
     application
@@ -34,19 +35,42 @@ dependencies {
     implementation(libs.bliki)
     implementation(libs.logback)
     implementation(libs.findbugs)
-    implementation(libs.flatbuffers)
 }
 
 // Apply a specific Java toolchain to ease working on different environments.
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
+        languageVersion = JavaLanguageVersion.of(25)
     }
 }
 
 application {
     // Define the main class for the application.
     mainClass = "fi.eonwe.wikilinks.Main"
+}
+
+tasks.named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJar") {
+    archiveFileName.set("wikilinks.jar")
+    manifest {
+        attributes["Main-Class"] = "fi.eonwe.wikilinks.Main"
+    }
+}
+
+tasks.named("build") {
+    dependsOn(tasks.named("shadowJar"))
+}
+
+tasks.named("startScripts") {
+    dependsOn(tasks.named("shadowJar"))
+}
+
+tasks.named<Jar>("jar") {
+    archiveFileName.set("wikilinks-thin.jar")
+}
+
+tasks.named("startShadowScripts") {
+    dependsOn(tasks.named("shadowJar"))
+    dependsOn(tasks.named("jar"))
 }
 
 

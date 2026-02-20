@@ -29,6 +29,7 @@ class WikiReaderTest {
     }
 
     private val baselineCache = mutableMapOf<TestData, Map<String, CanonicalPage>>()
+    private val baselineStatsCache = mutableMapOf<TestData, WikiProcessor.ReadPagesResult>()
 
     private fun canonicalizePagesByTitle(pages: List<BufferWikiPage>): Map<String, CanonicalPage> {
         val titlesById = pages.associate { it.id to it.title }
@@ -52,6 +53,32 @@ class WikiReaderTest {
             block(temp)
         } finally {
             Files.deleteIfExists(temp)
+        }
+    }
+
+    private fun indexSidecarPathFor(xmlPath: Path): Path {
+        val name = xmlPath.fileName.toString()
+        return xmlPath.resolveSibling(name.removeSuffix(".xml.bz2") + "-index.txt.bz2")
+    }
+
+    private fun usingTempCompressedFileWithSidecar(
+        xmlData: TestData,
+        indexData: TestData,
+        block: (Path, Path) -> Unit
+    ) {
+        val xmlBytes = usingTestDump(xmlData) { it.readAllBytes() }
+        val indexBytes = usingTestDump(indexData) { it.readAllBytes() }
+        val tempDir = Files.createTempDirectory("wikireader-test-with-index-")
+        val xmlPath = tempDir.resolve("fixture.xml.bz2")
+        val indexPath = indexSidecarPathFor(xmlPath)
+        try {
+            Files.write(xmlPath, xmlBytes)
+            Files.write(indexPath, indexBytes)
+            block(xmlPath, indexPath)
+        } finally {
+            Files.deleteIfExists(indexPath)
+            Files.deleteIfExists(xmlPath)
+            Files.deleteIfExists(tempDir)
         }
     }
 
@@ -80,6 +107,16 @@ class WikiReaderTest {
                 }
             }
             canonicalizePagesByTitle(pages)
+        }
+    }
+
+    private fun baselineStatsFor(testData: TestData): WikiProcessor.ReadPagesResult {
+        return baselineStatsCache.getOrPut(testData) {
+            usingTestDump(testData) { input ->
+                BZip2CompressorInputStream(input, true).use { wikiInput ->
+                    WikiProcessor.readPagesWithStats(wikiInput)
+                }
+            }
         }
     }
 
@@ -126,20 +163,24 @@ class WikiReaderTest {
         fun `generateSubstreams finds streams with surrounding bytes`() {
             val data = byteArrayOf(
                 0x01, 0x02, 0x03,
-                0x42, 0x5A, 0x68, '1'.code.toByte(), 0x11, 0x12,
-                0x42, 0x5A, 0x68, '9'.code.toByte(), 0x21, 0x22, 0x23,
+                0x42, 0x5A, 0x68, '1'.code.toByte(), 0x31, 0x41, 0x59, 0x26, 0x53, 0x59, 0x11, 0x12,
+                0x42, 0x5A, 0x68, '9'.code.toByte(), 0x31, 0x41, 0x59, 0x26, 0x53, 0x59, 0x21, 0x22, 0x23,
                 0x55, 0x66
             )
             val parts = WikiReader.generateSubstreams(sourceFrom(data)).toList()
             parts.size shouldBe 2
-            (parts[0].endExclusive - parts[0].start) shouldBe 6L
-            (parts[1].endExclusive - parts[1].start) shouldBe 9L
+            (parts[0].endExclusive - parts[0].start) shouldBe 12L
+            (parts[1].endExclusive - parts[1].start) shouldBe 15L
         }
 
         @Test
         fun `generateSubstreams keeps exact bytes per stream`() {
-            val streamA = byteArrayOf(0x42, 0x5A, 0x68, '1'.code.toByte(), 0x70, 0x71, 0x72)
-            val streamB = byteArrayOf(0x42, 0x5A, 0x68, '2'.code.toByte(), 0x40, 0x41)
+            val streamA = byteArrayOf(
+                0x42, 0x5A, 0x68, '1'.code.toByte(), 0x31, 0x41, 0x59, 0x26, 0x53, 0x59, 0x70, 0x71, 0x72
+            )
+            val streamB = byteArrayOf(
+                0x42, 0x5A, 0x68, '2'.code.toByte(), 0x31, 0x41, 0x59, 0x26, 0x53, 0x59, 0x40, 0x41
+            )
             val data = streamA + streamB
             val source = sourceFrom(data)
 
@@ -191,7 +232,7 @@ class WikiReaderTest {
             ProcessingConfig(parallelism = 8U, maxBlocksWaiting = 8U),
             ProcessingConfig(parallelism = 4U, maxBlocksWaiting = 1U)
         )
-        private val dataSets = listOf(TestData.Sileasin, TestData.Faroese)
+        private val dataSets = listOf(TestData.Sileasin, TestData.Faroese, TestData.NewSilesian)
         private val sourceTypes = listOf(ReaderSourceType.IN_MEMORY, ReaderSourceType.FILE)
 
         @TestFactory
@@ -208,6 +249,90 @@ class WikiReaderTest {
                             fromReader shouldBe fromProcessor
                         }
                     }
+                }
+            }
+        }
+
+        @TestFactory
+        @Timeout(value = 180, unit = TimeUnit.SECONDS)
+        fun `wikireader stats match wikiprocessor on full matrix`(): List<DynamicTest> {
+            return sourceTypes.flatMap { sourceType ->
+                configs.flatMap { config ->
+                    dataSets.map { data ->
+                        DynamicTest.dynamicTest(
+                            "stats source=$sourceType config=$config data=$data"
+                        ) {
+                            val result = when (sourceType) {
+                                ReaderSourceType.IN_MEMORY -> usingTestDumpBB(data) { bb ->
+                                    WikiReader.readPagesWithStats(ByteBufferCompressedSource(bb), config)
+                                }
+
+                                ReaderSourceType.FILE -> {
+                                    lateinit var pages: WikiProcessor.ReadPagesResult
+                                    usingTempCompressedFile(data) { path ->
+                                        pages = WikiReader.readPagesWithStats(FileCompressedSource(path), config)
+                                    }
+                                    pages
+                                }
+                            }
+                            val baseline = baselineStatsFor(data)
+                            result.beforeRedirectCleanup shouldBe baseline.beforeRedirectCleanup
+                            result.afterRedirectCleanup shouldBe baseline.afterRedirectCleanup
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @Nested
+    inner class IndexDrivenReading {
+        @Test
+        fun `auto mode uses sidecar index when available`() {
+            usingTempCompressedFileWithSidecar(TestData.NewSilesian, TestData.NewSilesianIndex) { xmlPath, _ ->
+                val fromReader = canonicalizePagesByTitle(
+                    WikiReader.readPages(
+                        FileCompressedSource(xmlPath),
+                        ProcessingConfig(parallelism = 4U, maxBlocksWaiting = 2U),
+                        indexSelection = WikiReader.IndexSelection.AUTO
+                    )
+                )
+                fromReader shouldBe baselineFor(TestData.NewSilesian)
+            }
+        }
+
+        @Test
+        fun `explicit index path works`() {
+            usingTempCompressedFileWithSidecar(TestData.NewSilesian, TestData.NewSilesianIndex) { xmlPath, indexPath ->
+                val fromReader = canonicalizePagesByTitle(
+                    WikiReader.readPages(
+                        FileCompressedSource(xmlPath),
+                        ProcessingConfig(parallelism = 4U, maxBlocksWaiting = 2U),
+                        indexSelection = WikiReader.IndexSelection.EXPLICIT,
+                        explicitIndexPath = indexPath
+                    )
+                )
+                fromReader shouldBe baselineFor(TestData.NewSilesian)
+            }
+        }
+
+        @Test
+        fun `invalid explicit index falls back to single-threaded and still reads correctly`() {
+            usingTempCompressedFile(TestData.NewSilesian) { xmlPath ->
+                val badIndex = Files.createTempFile("wikireader-test-invalid-index-", ".txt.bz2")
+                try {
+                    Files.write(badIndex, "this is not a bz2 index".toByteArray())
+                    val fromReader = canonicalizePagesByTitle(
+                        WikiReader.readPages(
+                            FileCompressedSource(xmlPath),
+                            ProcessingConfig(parallelism = 4U, maxBlocksWaiting = 2U),
+                            indexSelection = WikiReader.IndexSelection.EXPLICIT,
+                            explicitIndexPath = badIndex
+                        )
+                    )
+                    fromReader shouldBe baselineFor(TestData.NewSilesian)
+                } finally {
+                    Files.deleteIfExists(badIndex)
                 }
             }
         }
