@@ -113,6 +113,36 @@ class SegmentWikiGraphStore private constructor(
         return SegmentIntCursor(inEdges, start, degree)
     }
 
+    fun forEachNode(consumer: (NodeRecord) -> Unit) {
+        for (entry in 0 until nodeCount) {
+            val entryOffset = entry.toLong() * ID_RECORD_SIZE_BYTES
+            val id = idIndex.get(I32, entryOffset + ID_ID_OFFSET)
+            val rank = idIndex.get(I32, entryOffset + ID_RANK_OFFSET)
+            val base = nodeRecordOffset(rank)
+            val titleOffset = nodes.get(I64, base + NODE_TITLE_OFFSET)
+            val titleLen = nodes.get(I32, base + NODE_TITLE_LEN_OFFSET)
+            val titleBytes = ByteArray(titleLen)
+            for (i in 0 until titleLen) {
+                titleBytes[i] = titles.get(I8, titleOffset + i)
+            }
+            val outStart = nodes.get(I64, base + NODE_OUT_START_OFFSET)
+            val outDegree = nodes.get(I32, base + NODE_OUT_DEGREE_OFFSET)
+            val outLinks = IntArray(outDegree)
+            for (i in 0 until outDegree) {
+                outLinks[i] = outEdges.get(I32, (outStart + i.toLong()) * Int.SIZE_BYTES)
+            }
+            val flags = nodes.get(I32, base + NODE_FLAGS_OFFSET)
+            consumer(
+                NodeRecord(
+                    id = id,
+                    title = String(titleBytes, Charsets.UTF_8),
+                    isRedirect = (flags and FLAG_REDIRECT) != 0,
+                    outLinks = outLinks
+                )
+            )
+        }
+    }
+
     override fun close() {
         arena.close()
         channel.close()

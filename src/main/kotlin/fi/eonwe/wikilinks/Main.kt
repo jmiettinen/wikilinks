@@ -10,6 +10,9 @@ import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.types.file
 import fi.eonwe.wikilinks.leanpages.BufferWikiPage
 import fi.eonwe.wikilinks.leanpages.BufferWikiSerialization
+import fi.eonwe.wikilinks.segmentgraph.BufferPagesGraphDataSource
+import fi.eonwe.wikilinks.segmentgraph.GraphDataSource
+import fi.eonwe.wikilinks.segmentgraph.SegmentStoreGraphDataSource
 import fi.eonwe.wikilinks.segmentgraph.SegmentWikiGraphSerialization
 import fi.eonwe.wikilinks.segmentgraph.SegmentWikiRoutes
 import fi.eonwe.wikilinks.utils.Helpers
@@ -28,9 +31,12 @@ object Main {
     private const val GENERAL_ERROR = 2
     private const val DEFAULT_BENCHMARK_MEASUREMENTS = 50
 
-    private enum class GraphFormat {
-        BUFFER,
-        SEGMENT
+    private enum class InputFormat {
+        XML, BUFFER, SEGMENT
+    }
+
+    private enum class OutputFormat {
+        BUFFER, SEGMENT
     }
 
     @JvmStatic
@@ -52,85 +58,143 @@ object Main {
     }
 
     private class ConvertCommand : CliktCommand(name = "convert") {
-        private val xmlInput by option("-x", "--xml", help = "Input WikiMedia XML file")
+        private val inputFile by option("--input", help = "Input file path")
             .file(canBeFile = true, canBeDir = false, mustExist = true, mustBeReadable = true, mustBeWritable = false)
-        private val writeOutput by option("-o", "--output", help = "Output serialized graph file")
+        private val inputFormatName by option("--input-format", help = "Input format: xml | buffer | segment")
+            .default("xml")
+        private val outputFile by option("--output", help = "Output file path")
             .file(canBeFile = true, canBeDir = false, mustBeWritable = false)
+        private val outputFormatName by option("--output-format", help = "Output format: buffer | segment")
+            .default("segment")
         private val indexInput by option("--index", help = "Input multistream index file (.txt.bz2)")
             .file(canBeFile = true, canBeDir = false, mustExist = true, mustBeReadable = true, mustBeWritable = false)
         private val noIndex by option("--no-index", help = "Disable index usage for .bz2 XML input")
             .flag(default = false)
-        private val formatName by option(
-            "--format",
-            help = "Output format: buffer | segment"
-        ).default("buffer")
 
         override fun run() {
-            val inputFile = xmlInput ?: throw ProgramResult(GENERAL_ERROR)
-            val outputFile = writeOutput ?: throw ProgramResult(GENERAL_ERROR)
+            val input = inputFile ?: throw ProgramResult(GENERAL_ERROR)
+            val output = outputFile ?: throw ProgramResult(GENERAL_ERROR)
+            if (output.exists()) {
+                System.err.printf("File %s already exists. Exiting%n", output)
+                throw ProgramResult(GENERAL_ERROR)
+            }
             if (indexInput != null && noIndex) {
                 System.err.println("Cannot use --index and --no-index together")
                 throw ProgramResult(GENERAL_ERROR)
             }
-            if ((indexInput != null || noIndex) && !inputFile.name.endsWith(".bz2")) {
+
+            val inputFormat = parseInputFormat(inputFormatName)
+            val outputFormat = parseOutputFormat(outputFormatName)
+            if ((indexInput != null || noIndex) && inputFormat != InputFormat.XML) {
+                System.err.println("--index and --no-index are only valid with --input-format xml")
+                throw ProgramResult(GENERAL_ERROR)
+            }
+            if (inputFormat == InputFormat.XML && (indexInput != null || noIndex) && !input.name.endsWith(".bz2")) {
                 System.err.println("--index and --no-index are only valid for .bz2 XML input")
                 throw ProgramResult(GENERAL_ERROR)
             }
-            if (outputFile.exists()) {
-                System.err.printf("File %s already exists. Exiting%n", outputFile)
-                throw ProgramResult(GENERAL_ERROR)
+
+            val source = createInputSource(input, inputFormat, indexInput, noIndex)
+            source.use {
+                writeConvertedGraph(output, outputFormat, it)
             }
-
-            val format = parseFormat(formatName)
-            val loadStart = System.currentTimeMillis()
-            System.out.printf("Starting to read %s%n", inputFile)
-            val pages = readXml(inputFile, inputFile.name.endsWith(".bz2"), indexInput, noIndex).also { it.sort() }
-            System.out.printf("Read %s in %d ms%n", inputFile, System.currentTimeMillis() - loadStart)
-
-            val writeStart = System.currentTimeMillis()
-            System.out.printf("Starting to write output to %s (%s)%n", outputFile, format.name.lowercase())
-            writeTo(outputFile, pages, format)
-            System.out.printf("Finished in %d ms%n", System.currentTimeMillis() - writeStart)
         }
     }
 
     private class QueryCommand : CliktCommand(name = "query") {
-        private val serializedInput by option("-s", "--serialized", help = "Input serialized graph file")
+        private val inputFile by option("--input", help = "Input serialized graph file")
             .file(canBeFile = true, canBeDir = false, mustExist = true, mustBeReadable = true, mustBeWritable = false)
-        private val benchmarkMode by option("-b", "--benchmark", help = "Run benchmark mode").flag(default = false)
-        private val formatName by option(
-            "--format",
-            help = "Input format: buffer | segment"
-        ).default("buffer")
+        private val inputFormatName by option("--input-format", help = "Input format: buffer | segment")
+            .default("segment")
+        private val benchmarkMode by option("--benchmark", help = "Run benchmark mode").flag(default = false)
 
         override fun run() {
-            val inputFile = serializedInput ?: throw ProgramResult(GENERAL_ERROR)
-            val format = parseFormat(formatName)
-            when (format) {
-                GraphFormat.BUFFER -> {
-                    val pages = readBufferSerialized(inputFile)
+            val input = inputFile ?: throw ProgramResult(GENERAL_ERROR)
+            val inputFormat = parseInputFormat(inputFormatName)
+            when (inputFormat) {
+                InputFormat.XML -> {
+                    System.err.println("query does not support --input-format xml")
+                    throw ProgramResult(GENERAL_ERROR)
+                }
+
+                InputFormat.BUFFER -> {
+                    val pages = readBufferSerialized(input)
                     runQueryModeForPages(pages, benchmarkMode)
                 }
 
-                GraphFormat.SEGMENT -> {
-                    SegmentWikiGraphSerialization.open(inputFile.toPath()).use { store ->
-                        val routes = SegmentWikiRoutes(store)
-                        runQueryModeForSegment(routes, benchmarkMode)
+                InputFormat.SEGMENT -> {
+                    SegmentWikiGraphSerialization.open(input.toPath()).use { store ->
+                        runQueryModeForSegment(SegmentWikiRoutes(store), benchmarkMode)
                     }
                 }
             }
         }
     }
 
-    private fun parseFormat(name: String): GraphFormat {
+    private fun parseInputFormat(name: String): InputFormat {
         return when (name.lowercase()) {
-            "buffer" -> GraphFormat.BUFFER
-            "segment" -> GraphFormat.SEGMENT
+            "xml" -> InputFormat.XML
+            "buffer" -> InputFormat.BUFFER
+            "segment" -> InputFormat.SEGMENT
             else -> {
-                System.err.println("Unknown format '$name'. Expected one of: buffer, segment")
+                System.err.println("Unknown input format '$name'. Expected: xml, buffer, segment")
                 throw ProgramResult(GENERAL_ERROR)
             }
         }
+    }
+
+    private fun parseOutputFormat(name: String): OutputFormat {
+        return when (name.lowercase()) {
+            "buffer" -> OutputFormat.BUFFER
+            "segment" -> OutputFormat.SEGMENT
+            else -> {
+                System.err.println("Unknown output format '$name'. Expected: buffer, segment")
+                throw ProgramResult(GENERAL_ERROR)
+            }
+        }
+    }
+
+    private fun createInputSource(
+        input: File,
+        inputFormat: InputFormat,
+        indexInput: File?,
+        noIndex: Boolean
+    ): GraphDataSource {
+        return when (inputFormat) {
+            InputFormat.XML -> {
+                val pages = readXml(input, input.name.endsWith(".bz2"), indexInput, noIndex)
+                pages.sort()
+                BufferPagesGraphDataSource(pages)
+            }
+
+            InputFormat.BUFFER -> BufferPagesGraphDataSource(readBufferSerialized(input))
+            InputFormat.SEGMENT -> SegmentStoreGraphDataSource(SegmentWikiGraphSerialization.open(input.toPath()))
+        }
+    }
+
+    private fun writeConvertedGraph(output: File, format: OutputFormat, source: GraphDataSource) {
+        val writeStart = System.currentTimeMillis()
+        System.out.printf("Starting to write output to %s (%s)%n", output, format.name.lowercase())
+        when (format) {
+            OutputFormat.BUFFER -> {
+                val pages = mutableListOf<BufferWikiPage>()
+                source.forEachNode { node ->
+                    pages.add(BufferWikiPage.createFrom(node.id, node.outLinks, node.title, node.isRedirect))
+                }
+                pages.sort()
+                FileOutputStream(output).use { fos ->
+                    BufferWikiSerialization().serialize(pages, fos.channel)
+                    fos.fd.sync()
+                }
+            }
+
+            OutputFormat.SEGMENT -> {
+                FileChannel.open(output.toPath(), StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE).use { fc ->
+                    SegmentWikiGraphSerialization().serialize(source, fc)
+                }
+            }
+        }
+        System.out.printf("Finished in %d ms%n", System.currentTimeMillis() - writeStart)
     }
 
     private fun runQueryModeForPages(pages: MutableList<BufferWikiPage>, benchmarkMode: Boolean) {
@@ -203,24 +267,6 @@ object Main {
             }
         } catch (e: IOException) {
             reportErrorAndExit(e)
-        }
-    }
-
-    @Throws(IOException::class)
-    private fun writeTo(outputFile: File, pages: MutableList<BufferWikiPage>, format: GraphFormat) {
-        when (format) {
-            GraphFormat.BUFFER -> FileOutputStream(outputFile).use { fos ->
-                BufferWikiSerialization().serialize(pages, fos.channel)
-                fos.fd.sync()
-            }
-
-            GraphFormat.SEGMENT -> FileChannel.open(
-                outputFile.toPath(),
-                StandardOpenOption.CREATE_NEW,
-                StandardOpenOption.WRITE
-            ).use { fc ->
-                SegmentWikiGraphSerialization().serialize(pages, fc)
-            }
         }
     }
 
@@ -343,3 +389,4 @@ object Main {
         exitProcess(1)
     }
 }
+

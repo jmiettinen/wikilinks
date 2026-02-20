@@ -10,6 +10,22 @@ import java.nio.file.StandardOpenOption
 import kotlin.math.min
 
 class SegmentWikiGraphSerialization {
+    fun serialize(source: GraphDataSource, channel: FileChannel) {
+        val records = buildList(source.nodeCount) {
+            source.forEachNode { node ->
+                add(
+                    PageRecord(
+                        id = node.id,
+                        title = node.title,
+                        isRedirect = node.isRedirect,
+                        links = node.outLinks
+                    )
+                )
+            }
+        }
+        serializeRecords(records, channel)
+    }
+
     fun serialize(pages: Collection<BufferWikiPage>, channel: FileChannel) {
         val records = pages.asSequence()
             .map { page ->
