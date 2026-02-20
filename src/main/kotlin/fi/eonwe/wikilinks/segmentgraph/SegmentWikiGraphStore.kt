@@ -25,20 +25,22 @@ class SegmentWikiGraphStore private constructor(
 
     fun findIdByTitle(title: String): Int? {
         val query = title.toByteArray(Charsets.UTF_8)
+        val rank = binarySearchNameIndex(query)
+        return if (rank >= 0) nameRecordId(rank) else null
+    }
+
+    private fun binarySearchNameIndex(query: ByteArray): Int {
         var lo = 0
         var hi = nodeCount - 1
         while (lo <= hi) {
             val mid = (lo + hi) ushr 1
-            val keyOffset = nameRecordKeyOffset(mid)
-            val keyLen = nameRecordKeyLen(mid)
-            val cmp = compareUnsignedLex(query, nameKeys, keyOffset, keyLen)
-            when {
-                cmp == 0 -> return nameRecordId(mid)
-                cmp < 0 -> hi = mid - 1
+            when (compareNameRecordWithQuery(mid, query)) {
+                0 -> return mid
+                in Int.MIN_VALUE..-1 -> hi = mid - 1
                 else -> lo = mid + 1
             }
         }
-        return null
+        return -1
     }
 
     fun hasTitle(title: String): Boolean = findIdByTitle(title) != null
@@ -124,6 +126,12 @@ class SegmentWikiGraphStore private constructor(
 
     private fun nameRecordId(rank: Int): Int = nameIndex.get(I32, nameRecordOffset(rank) + NAME_ID_OFFSET)
 
+    private fun compareNameRecordWithQuery(rank: Int, query: ByteArray): Int {
+        val keyOffset = nameRecordKeyOffset(rank)
+        val keyLen = nameRecordKeyLen(rank)
+        return compareUnsignedLex(query, nameKeys, keyOffset, keyLen)
+    }
+
     private fun nodeRecordOffset(rank: Int): Long = rank.toLong() * NODE_RECORD_SIZE_BYTES
 
     private fun compareUnsignedLex(query: ByteArray, keys: MemorySegment, keyOffset: Long, keyLen: Int): Int {
@@ -199,6 +207,26 @@ class SegmentWikiGraphStore private constructor(
         private const val ID_ID_OFFSET: Long = 0
         private const val ID_RANK_OFFSET: Long = 4
 
+        private const val HEADER_MAGIC_OFFSET: Long = 0
+        private const val HEADER_VERSION_OFFSET: Long = 8
+        private const val HEADER_NODE_COUNT_OFFSET: Long = 16
+        private const val HEADER_EDGE_COUNT_OUT_OFFSET: Long = 24
+        private const val HEADER_EDGE_COUNT_IN_OFFSET: Long = 32
+        private const val HEADER_NODES_OFFSET: Long = 40
+        private const val HEADER_NODES_LENGTH_OFFSET: Long = 48
+        private const val HEADER_TITLES_OFFSET: Long = 56
+        private const val HEADER_TITLES_LENGTH_OFFSET: Long = 64
+        private const val HEADER_OUT_EDGES_OFFSET: Long = 72
+        private const val HEADER_OUT_EDGES_LENGTH_OFFSET: Long = 80
+        private const val HEADER_IN_EDGES_OFFSET: Long = 88
+        private const val HEADER_IN_EDGES_LENGTH_OFFSET: Long = 96
+        private const val HEADER_NAME_INDEX_OFFSET: Long = 104
+        private const val HEADER_NAME_INDEX_LENGTH_OFFSET: Long = 112
+        private const val HEADER_NAME_KEYS_OFFSET: Long = 120
+        private const val HEADER_NAME_KEYS_LENGTH_OFFSET: Long = 128
+        private const val HEADER_ID_INDEX_OFFSET: Long = 136
+        private const val HEADER_ID_INDEX_LENGTH_OFFSET: Long = 144
+
         private val I8: ValueLayout.OfByte = ValueLayout.JAVA_BYTE
         private val I32: ValueLayout.OfInt =
             ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN) as ValueLayout.OfInt
@@ -210,29 +238,31 @@ class SegmentWikiGraphStore private constructor(
             val arena = Arena.ofShared()
             try {
                 val header = channel.map(FileChannel.MapMode.READ_ONLY, 0, HEADER_SIZE_BYTES.toLong(), arena)
-                val magic = header.get(I64, 0)
+                val magic = header.get(I64, HEADER_MAGIC_OFFSET)
                 require(magic == MAGIC) { "Invalid segment graph magic: $magic" }
-                val version = header.get(I32, 8)
+                val version = header.get(I32, HEADER_VERSION_OFFSET)
                 require(version == VERSION) { "Unsupported segment graph version: $version" }
 
-                val nodeCountLong = header.get(I64, 16)
+                val nodeCountLong = header.get(I64, HEADER_NODE_COUNT_OFFSET)
                 require(nodeCountLong in 1..Int.MAX_VALUE.toLong()) { "Invalid node count $nodeCountLong" }
                 val nodeCount = nodeCountLong.toInt()
+                require(header.get(I64, HEADER_EDGE_COUNT_OUT_OFFSET) >= 0) { "Invalid out-edge count" }
+                require(header.get(I64, HEADER_EDGE_COUNT_IN_OFFSET) >= 0) { "Invalid in-edge count" }
 
-                val nodesOffset = header.get(I64, 40)
-                val nodesLen = header.get(I64, 48)
-                val titlesOffset = header.get(I64, 56)
-                val titlesLen = header.get(I64, 64)
-                val outOffset = header.get(I64, 72)
-                val outLen = header.get(I64, 80)
-                val inOffset = header.get(I64, 88)
-                val inLen = header.get(I64, 96)
-                val nameIndexOffset = header.get(I64, 104)
-                val nameIndexLen = header.get(I64, 112)
-                val nameKeysOffset = header.get(I64, 120)
-                val nameKeysLen = header.get(I64, 128)
-                val idIndexOffset = header.get(I64, 136)
-                val idIndexLen = header.get(I64, 144)
+                val nodesOffset = header.get(I64, HEADER_NODES_OFFSET)
+                val nodesLen = header.get(I64, HEADER_NODES_LENGTH_OFFSET)
+                val titlesOffset = header.get(I64, HEADER_TITLES_OFFSET)
+                val titlesLen = header.get(I64, HEADER_TITLES_LENGTH_OFFSET)
+                val outOffset = header.get(I64, HEADER_OUT_EDGES_OFFSET)
+                val outLen = header.get(I64, HEADER_OUT_EDGES_LENGTH_OFFSET)
+                val inOffset = header.get(I64, HEADER_IN_EDGES_OFFSET)
+                val inLen = header.get(I64, HEADER_IN_EDGES_LENGTH_OFFSET)
+                val nameIndexOffset = header.get(I64, HEADER_NAME_INDEX_OFFSET)
+                val nameIndexLen = header.get(I64, HEADER_NAME_INDEX_LENGTH_OFFSET)
+                val nameKeysOffset = header.get(I64, HEADER_NAME_KEYS_OFFSET)
+                val nameKeysLen = header.get(I64, HEADER_NAME_KEYS_LENGTH_OFFSET)
+                val idIndexOffset = header.get(I64, HEADER_ID_INDEX_OFFSET)
+                val idIndexLen = header.get(I64, HEADER_ID_INDEX_LENGTH_OFFSET)
 
                 val size = channel.size()
                 require(nodesOffset + nodesLen <= size) { "Nodes section out of file bounds" }
@@ -274,7 +304,6 @@ class SegmentWikiGraphStore private constructor(
         }
     }
 }
-
 interface IntCursor {
     fun hasNext(): Boolean
     fun nextInt(): Int
