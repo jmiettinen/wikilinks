@@ -135,7 +135,7 @@ class WikiProcessor private constructor() {
             map.values.asSequence()
                 .filter { p ->
                     val page = p.page
-                    page != null && page.isRedirect()
+                    page != null && page.isRedirect
                 }.forEach { p ->
                     val didFindEndPage = endSomewhere(p, map, null)
                     if (!didFindEndPage) {
@@ -161,7 +161,7 @@ class WikiProcessor private constructor() {
                     visited.put(immediateTarget, true)
                 }
                 val redirectPage = immediateTarget
-                val redirectPointer = map[redirectPage.target()]
+                val redirectPointer = map[redirectPage.target]
                 if (redirectPointer == null) {
                     return false
                 } else {
@@ -188,7 +188,7 @@ class WikiProcessor private constructor() {
                 } else if (page is WikiPageData) {
                     articleCount++
                     val p = page
-                    for (linkPointer in p.links()) {
+                    for (linkPointer in p.links) {
                         val linkedPage = linkPointer.page
                         if (linkedPage == null) {
                             nullLinkCount++
@@ -232,7 +232,7 @@ class WikiProcessor private constructor() {
                     var links: IntArray
                     val isRedirect = if (page is WikiRedirectPage) {
                         val redirectPage = page
-                        val target = redirectPage.target()
+                        val target = redirectPage.target
                         val pagePointer = map[target]
                         if (pagePointer == null || pagePointer.page == null) {
                             links = EMPTY_ARRAY
@@ -242,7 +242,7 @@ class WikiProcessor private constructor() {
                         true
                     } else {
                         val pageData = page as WikiPageData
-                        links = pageData.links()
+                        links = pageData.links
                             .stream()
                             .map { it.page }
                             .filter { it != null }

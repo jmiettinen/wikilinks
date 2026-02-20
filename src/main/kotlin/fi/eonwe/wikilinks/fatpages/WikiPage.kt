@@ -1,23 +1,21 @@
-package fi.eonwe.wikilinks.fatpages;
+package fi.eonwe.wikilinks.fatpages
 
 /**
  */
-public interface WikiPage {
-
+interface WikiPage {
     /**
      * Is this a redirect to another page or an actual page?
      * @return
      */
-    boolean isRedirect();
+    val isRedirect: Boolean
 
     /**
      * @return a unique identifier for this page
      */
-    int id();
+    fun id(): Int
 
     /**
      * @return title of the page
      */
-    String title();
-
+    fun title(): String
 }

@@ -2,7 +2,6 @@ package fi.eonwe.wikilinks.segmentgraph
 
 import fi.eonwe.wikilinks.fatpages.WikiPageData
 import fi.eonwe.wikilinks.leanpages.BufferWikiPage
-import java.io.IOException
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.channels.FileChannel
@@ -33,14 +32,14 @@ class SegmentWikiGraphSerialization {
     fun serializeFatPages(pages: Collection<WikiPageData>, channel: FileChannel) {
         val records = pages.asSequence()
             .map { page ->
-                val links = page.links().asSequence()
+                val links = page.links.asSequence()
                     .mapNotNull { ptr -> ptr.page?.id() }
                     .distinct()
                     .toList()
                     .toIntArray()
                 PageRecord(
-                    id = page.id(),
-                    title = page.title(),
+                    id = page.id,
+                    title = page.title,
                     isRedirect = false,
                     links = links
                 )

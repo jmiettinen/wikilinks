@@ -69,7 +69,7 @@ class WikiLinksTest {
         WikiProcessor.dropRedirectLoops(convert(map))
 
         listOf(fooDir, foofooDir).map {
-            map[it.title()]?.page!!
+            map[it.title]?.page!!
         } shouldBeEqual listOf(fooPage, fooPage)
     }
 
@@ -87,7 +87,7 @@ class WikiLinksTest {
         }
         WikiProcessor.dropRedirectLoops(convert(map))
         val tmp = listOf(fooDir, foofooDir, foofoofooDir).fold(0) { acc, p ->
-            if (map[p.title()]?.page != null) {
+            if (map[p.title]?.page != null) {
                 acc + 1
             } else {
                 acc
