@@ -7,10 +7,9 @@ import fi.eonwe.wikilinks.fatpages.WikiRedirectPage
 import fi.eonwe.wikilinks.leanpages.BufferWikiPage
 import info.bliki.wiki.dump.WikiPatternMatcher
 import info.bliki.wiki.dump.WikiXMLParser
-import net.openhft.koloboke.collect.map.hash.HashObjObjMap
-import net.openhft.koloboke.collect.map.hash.HashObjObjMaps
 import java.io.InputStream
 import java.util.Arrays
+import java.util.HashMap
 import java.util.IdentityHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -30,8 +29,8 @@ class WikiProcessor private constructor() {
         val afterRedirectCleanup: GraphStatistics
     )
 
-    fun preProcess(input: InputStream): HashObjObjMap<String, PagePointer> {
-        val titleToPage = HashObjObjMaps.newMutableMap<String, PagePointer>(12000000)
+    fun preProcess(input: InputStream): MutableMap<String, PagePointer> {
+        val titleToPage = HashMap<String, PagePointer>(12000000)
         var nextInternalId = 0
 
         fun nextPageId(): Int {
@@ -121,7 +120,7 @@ class WikiProcessor private constructor() {
             return linkName
         }
 
-        fun fixPagePointers(titleToPage: HashObjObjMap<String, PagePointer>, page: WikiPage) {
+        fun fixPagePointers(titleToPage: MutableMap<String, PagePointer>, page: WikiPage) {
             var pointer = titleToPage[page.title()]
             if (pointer != null) {
                 pointer.page = page
@@ -131,7 +130,7 @@ class WikiProcessor private constructor() {
             }
         }
 
-        fun dropRedirectLoops(map: HashObjObjMap<String, PagePointer>) {
+        fun dropRedirectLoops(map: MutableMap<String, PagePointer>) {
             map.values.asSequence()
                 .filter { p ->
                     val page = p.page
@@ -146,7 +145,7 @@ class WikiProcessor private constructor() {
 
         private fun endSomewhere(
             redirect: PagePointer,
-            map: HashObjObjMap<String, PagePointer>,
+            map: MutableMap<String, PagePointer>,
             visited: IdentityHashMap<WikiPage, Boolean>?
         ): Boolean {
             var visited = visited
@@ -172,7 +171,7 @@ class WikiProcessor private constructor() {
             }
         }
 
-        fun gatherStatistics(map: MutableMap<String?, PagePointer>): GraphStatistics {
+        fun gatherStatistics(map: MutableMap<String, PagePointer>): GraphStatistics {
             var articleCount = 0
             var redirectCount = 0
             var linkCount = 0
@@ -206,7 +205,7 @@ class WikiProcessor private constructor() {
             )
         }
 
-        fun printStatistics(map: MutableMap<String?, PagePointer>) {
+        fun printStatistics(map: MutableMap<String, PagePointer>) {
             printStatistics(gatherStatistics(map))
         }
 
@@ -224,7 +223,7 @@ class WikiProcessor private constructor() {
 
         private val EMPTY_ARRAY = IntArray(0)
 
-        fun packPages(map: HashObjObjMap<String, PagePointer>): MutableList<BufferWikiPage> {
+        fun packPages(map: MutableMap<String, PagePointer>): MutableList<BufferWikiPage> {
             val list = mutableListOf<BufferWikiPage>()
             map.forEach { (title: String, ptr: PagePointer) ->
                 val page = ptr.page

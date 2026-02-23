@@ -4,11 +4,7 @@ import fi.eonwe.wikilinks.leanpages.BufferWikiPage
 import fi.eonwe.wikilinks.leanpages.LeanWikiPage
 import fi.eonwe.wikilinks.utils.Functions.IntIntIntIntProcedure
 import fi.eonwe.wikilinks.utils.Helpers
-import net.openhft.koloboke.collect.hash.HashConfig
-import net.openhft.koloboke.collect.map.IntIntMap
-import net.openhft.koloboke.collect.map.hash.HashIntIntMap
-import net.openhft.koloboke.collect.map.hash.HashIntIntMaps
-import net.openhft.koloboke.function.IntIntConsumer
+import fi.eonwe.wikilinks.utils.IntIntOpenHashMap
 import java.util.concurrent.ThreadLocalRandom
 import java.util.function.IntConsumer
 import java.util.logging.Level
@@ -107,7 +103,7 @@ class WikiRoutes(pages: List<BufferWikiPage>) {
         fun forEachLinkIndex(pageIndex: Int, c: IntConsumer)
     }
 
-    private class LeanPageMapper(private val index: HashIntIntMap, private val links: IntArray) : PageMapper {
+    private class LeanPageMapper(private val index: IntIntOpenHashMap, private val links: IntArray) : PageMapper {
         override fun forEachLinkIndex(pageIndex: Int, c: IntConsumer) {
             val indexInLinks = index.getOrDefault(pageIndex, -1)
             // Not all pages are linked to.
@@ -129,7 +125,7 @@ class WikiRoutes(pages: List<BufferWikiPage>) {
 
         fun reverse(): LeanPageMapper {
             val (res, duration) = measureTimedValue {
-                val reverseCounts: IntIntMap = HashIntIntMaps.newMutableMap(index.size)
+                val reverseCounts = IntIntOpenHashMap(index.size, 0)
                 var reverseLinkerCount = 0
                 visitLinkArray(
                     links
@@ -140,18 +136,18 @@ class WikiRoutes(pages: List<BufferWikiPage>) {
                         reverseLinkerCount++
                     }
                 }
-                val reversedIndex = HashIntIntMaps.newMutableMap(reverseCounts.size)
+                val reversedIndex = IntIntOpenHashMap(reverseCounts.size)
 
                 var linkIndex = 0
                 val reversedLinks =
                     IntArray((reverseLinkerCount + ADDITIONAL_INFO * reverseCounts.size.toLong()).toIntOrThrow())
-                reverseCounts.forEach(IntIntConsumer { targetId: Int, count: Int ->
+                reverseCounts.forEach { targetId: Int, count: Int ->
                     val startLinkIndex = linkIndex
                     reversedIndex.put(targetId, startLinkIndex)
                     reversedLinks[startLinkIndex] = targetId
                     reversedLinks[startLinkIndex + 1] = 0
                     linkIndex += count + ADDITIONAL_INFO
-                })
+                }
                 fillLinks(reversedLinks, reversedIndex)
                 reversedIndex to reversedLinks
             }
@@ -165,7 +161,7 @@ class WikiRoutes(pages: List<BufferWikiPage>) {
             return LeanPageMapper(reversedIndex, reversedLinks)
         }
 
-        fun fillLinks(reversedLinks: IntArray, reversedIndex: HashIntIntMap) {
+        fun fillLinks(reversedLinks: IntArray, reversedIndex: IntIntOpenHashMap) {
             visitLinkArray(
                 links
             ) { linkerId: Int, linkCount: Int, firstLinkIndex: Int, firstPastLastLinkIndex: Int ->
@@ -206,22 +202,19 @@ class WikiRoutes(pages: List<BufferWikiPage>) {
                 val startTime = System.currentTimeMillis()
                 val totalLinkCount = pages.asSequence().map { it.linkCount.toLong() }.sum()
                 val links = IntArray(totalLinkCount.toIntOrThrow() + ADDITIONAL_INFO * pages.size)
-                val map = HashIntIntMaps.getDefaultFactory()
-                    .withHashConfig(HashConfig.fromLoads(0.1, 0.5, 0.75))
-                    .newImmutableMap({ mapCreator: IntIntConsumer? ->
-                        val linkIndex = intArrayOf(0)
-                        for (page in pages) {
-                            val sourceId = page.getId()
-                            val linkCount = page.linkCount
-                            val startLinkIndex = linkIndex[0]
-                            links[linkIndex[0]++] = sourceId
-                            links[linkIndex[0]++] = linkCount
-                            page.forEachLink { linkTarget: Int ->
-                                links[linkIndex[0]++] = linkTarget
-                            }
-                            mapCreator!!.accept(sourceId, startLinkIndex)
-                        }
-                    }, pages.size)
+                val map = IntIntOpenHashMap(pages.size)
+                var nextLinkIndex = 0
+                for (page in pages) {
+                    val sourceId = page.getId()
+                    val linkCount = page.linkCount
+                    val startLinkIndex = nextLinkIndex
+                    links[nextLinkIndex++] = sourceId
+                    links[nextLinkIndex++] = linkCount
+                    page.forEachLink { linkTarget: Int ->
+                        links[nextLinkIndex++] = linkTarget
+                    }
+                    map.put(sourceId, startLinkIndex)
+                }
 
                 logger.info {
                     String.format(
@@ -318,4 +311,3 @@ fun Long.toIntOrThrow(): Int {
         throw IllegalArgumentException("Too large to fit int $this")
     }
 }
-

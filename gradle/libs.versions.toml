@@ -9,7 +9,6 @@ findbugs = "3.0.1"
 clikt = "5.0.3"
 commons-compress = "1.27.1"
 bliki = "3.1.0"
-koloboke = "0.6.8"
 jgrapht = "0.9.1"
 kotest = "5.9.1"
 
@@ -20,7 +19,6 @@ logback = { module = "ch.qos.logback:logback-classic", version.ref = "logback" }
 findbugs = { module = "com.google.code.findbugs:jsr305", version.ref = "findbugs" }
 clikt = { module = "com.github.ajalt.clikt:clikt", version.ref = "clikt" }
 bliki = { module = "info.bliki.wiki:bliki-core", version.ref = "bliki" }
-koloboke-impl = { module = "net.openhft:koloboke-impl-jdk8", version.ref = "koloboke" }
 commons-compress = { module = "org.apache.commons:commons-compress", version.ref = "commons-compress" }
 jgrapht = { module = "org.jgrapht:jgrapht-core", version.ref = "jgrapht" }
 kotest-assertions = { module = "io.kotest:kotest-assertions-core", version.ref = "kotest" }

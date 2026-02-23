@@ -9,8 +9,6 @@ import fi.eonwe.wikilinks.leanpages.BufferWikiSerialization
 import io.kotest.matchers.equals.shouldBeEqual
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldStartWith
-import net.openhft.koloboke.collect.map.hash.HashObjObjMap
-import net.openhft.koloboke.collect.map.hash.HashObjObjMaps
 import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
@@ -23,6 +21,7 @@ import java.nio.ByteBuffer
 import java.nio.channels.WritableByteChannel
 import java.util.Arrays
 import java.util.Collections
+import java.util.HashMap
 import java.util.function.Consumer
 import kotlin.math.min
 
@@ -191,17 +190,17 @@ class WikiLinksTest {
     }
 
     companion object {
-        private fun convert(map: Map<String, PagePointer>): HashObjObjMap<String, PagePointer> {
-            return HashObjObjMaps.newImmutableMap(map)
+        private fun convert(map: Map<String, PagePointer>): MutableMap<String, PagePointer> {
+            return HashMap(map)
         }
 
         private fun createSimpleDenseGraph(
             size: Int,
             titlePrefix: String,
             duplicates: Boolean = false
-        ): HashObjObjMap<String, PagePointer> {
+        ): MutableMap<String, PagePointer> {
             val pointers = MutableList(size) { PagePointer(null) }
-            val map = HashObjObjMaps.newMutableMap<String, PagePointer>()
+            val map = HashMap<String, PagePointer>()
             for (i in pointers.indices) {
                 val pagePointers: MutableList<PagePointer> = Lists.newArrayList()
                 for (repeat in 0..<(if (duplicates) 2 else 1))

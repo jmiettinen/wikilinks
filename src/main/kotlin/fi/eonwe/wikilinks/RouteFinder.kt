@@ -1,9 +1,7 @@
 package fi.eonwe.wikilinks
 
 import fi.eonwe.wikilinks.utils.IntQueue
-import net.openhft.koloboke.collect.map.IntIntMap
-import net.openhft.koloboke.collect.map.hash.HashIntIntMaps
-import net.openhft.koloboke.function.IntIntConsumer
+import fi.eonwe.wikilinks.utils.IntIntOpenHashMap
 import java.util.function.IntConsumer
 
 /**
@@ -16,12 +14,8 @@ class RouteFinder private constructor(
 ) {
     private fun findWithReverse(): IntArray {
         checkNotNull(reverseMapper)
-        val forwardPrev: IntIntMap = HashIntIntMaps.getDefaultFactory()
-            .withDefaultValue(NOT_FOUND)
-            .newMutableMap(DEFAULT_SIZE)
-        val backwardPrev: IntIntMap = HashIntIntMaps.getDefaultFactory()
-            .withDefaultValue(NOT_FOUND)
-            .newMutableMap(DEFAULT_SIZE)
+        val forwardPrev = IntIntOpenHashMap(DEFAULT_SIZE, NOT_FOUND)
+        val backwardPrev = IntIntOpenHashMap(DEFAULT_SIZE, NOT_FOUND)
 
         val forwardQueue = IntQueue.growingQueue(DEFAULT_SIZE)
         val backwardQueue = IntQueue.growingQueue(DEFAULT_SIZE)
@@ -51,9 +45,7 @@ class RouteFinder private constructor(
     }
 
     private fun find(): IntArray {
-        val previous: IntIntMap = HashIntIntMaps.getDefaultFactory()
-            .withDefaultValue(NOT_FOUND)
-            .newMutableMap(DEFAULT_SIZE)
+        val previous = IntIntOpenHashMap(DEFAULT_SIZE, NOT_FOUND)
 
         val queue = IntQueue.growingQueue(DEFAULT_SIZE)
 
@@ -92,9 +84,9 @@ class RouteFinder private constructor(
 
         private fun findRoute(
             queue: IntQueue,
-            prevMap: IntIntMap,
+            prevMap: IntIntOpenHashMap,
             mapper: WikiRoutes.PageMapper,
-            reversePrevMap: IntIntMap
+            reversePrevMap: IntIntOpenHashMap
         ): Boolean {
             val id = queue.removeFirst()
             if (reversePrevMap.containsKey(id)) {
@@ -108,7 +100,7 @@ class RouteFinder private constructor(
             return false
         }
 
-        private fun countPath(map: IntIntMap, startIndex: Int, endIndex: Int): Int {
+        private fun countPath(map: IntIntOpenHashMap, startIndex: Int, endIndex: Int): Int {
             var size = 0
             var cur = startIndex
             while ((map.getOrDefault(cur, endIndex).also { cur = it }) != endIndex) {
@@ -135,12 +127,12 @@ class RouteFinder private constructor(
         private fun recordRoute(
             startIndex: Int,
             endIndex: Int,
-            forwardPrev: IntIntMap,
-            backwardPrev: IntIntMap
+            forwardPrev: IntIntOpenHashMap,
+            backwardPrev: IntIntOpenHashMap
         ): IntArray {
             val bestPath = intArrayOf(NOT_FOUND, Int.Companion.MAX_VALUE)
             val scoreIndex = bestPath.size - 1
-            backwardPrev.forEach(IntIntConsumer { target: Int, source: Int ->
+            backwardPrev.forEach { target: Int, source: Int ->
                 if (forwardPrev.containsKey(target)) {
                     val stepsBackwards: Int = countPath(forwardPrev, target, startIndex)
                     val stepsForwards: Int = countPath(backwardPrev, target, endIndex)
@@ -150,7 +142,7 @@ class RouteFinder private constructor(
                         bestPath[0] = target
                     }
                 }
-            })
+            }
             val firstPart = recordRoute(startIndex, bestPath[0], forwardPrev)
             val secondPart = recordRoute(endIndex, bestPath[0], backwardPrev).reversed()
             // We'll drop the index that was found both ways.
@@ -167,7 +159,7 @@ class RouteFinder private constructor(
             return values.asSequence().flatten().map { it }.toList().toIntArray()
         }
 
-        private fun recordRoute(startIndex: Int, endIndex: Int, previous: IntIntMap): List<Int> {
+        private fun recordRoute(startIndex: Int, endIndex: Int, previous: IntIntOpenHashMap): List<Int> {
             if (startIndex == endIndex) {
                 return mutableListOf(startIndex)
             }

@@ -29,7 +29,6 @@ dependencies {
 
     // This dependency is used by the application.
     implementation(libs.guava)
-    implementation(libs.koloboke.impl)
     implementation(libs.commons.compress)
     implementation(libs.clikt)
     implementation(libs.bliki)
