@@ -179,6 +179,9 @@ public class RouteFinder {
     }
 
     private static List<Integer> recordRoute(int startIndex, int endIndex, IntIntMap previous) {
+        if (startIndex == endIndex) {
+            return Collections.singletonList(startIndex);
+        }
         List<Integer> list = new ArrayList<>();
         int cur = endIndex;
         do {
