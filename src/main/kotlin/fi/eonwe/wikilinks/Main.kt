@@ -67,6 +67,8 @@ object Main {
             required = true
         )
         private val port by option("--port", help = "HTTP server port").default("8080")
+        private val maxInFlight by option("--max-in-flight-routes", help = "Maximum concurrent in-flight /route queries")
+            .default("8")
 
         override fun run() {
             val inputs = try {
@@ -80,8 +82,13 @@ object Main {
                 System.err.println("Invalid --port '$port', expected integer in 1..65535")
                 throw ProgramResult(GENERAL_ERROR)
             }
+            val parsedMaxInFlight = maxInFlight.toIntOrNull()
+            if (parsedMaxInFlight == null || parsedMaxInFlight <= 0) {
+                System.err.println("Invalid --max-in-flight-routes '$maxInFlight', expected integer > 0")
+                throw ProgramResult(GENERAL_ERROR)
+            }
             val registry = ServerWikiRegistry.open(inputs)
-            val http = WikiHttpServer(registry, parsedPort)
+            val http = WikiHttpServer(registry, parsedPort, parsedMaxInFlight)
             Runtime.getRuntime().addShutdownHook(
                 Thread {
                     http.close()

@@ -13,8 +13,10 @@ import java.util.concurrent.Executors
 
 class WikiHttpServer(
     private val registry: ServerWikiRegistry,
-    port: Int = 8080
+    port: Int = 8080,
+    maxInFlightRoutes: Int = 8
 ) : AutoCloseable {
+    private val routeLimiter = InFlightRequestLimiter(maxInFlightRoutes)
     private val server = HttpServer.create(InetSocketAddress(port), 0)
     private val executor = Executors.newVirtualThreadPerTaskExecutor()
 
@@ -108,15 +110,20 @@ class WikiHttpServer(
     }
 
     private fun handleRoute(exchange: HttpExchange, wiki: ServerWikiRegistry.LoadedWiki) {
+        val permit = routeLimiter.tryAcquire()
+        if (permit == null) {
+            json(exchange, 429, """{"error":"too many route queries in flight"}""")
+            return
+        }
         val query = parseQuery(exchange.requestURI)
         val from = query["from"]?.trim().orEmpty()
         val to = query["to"]?.trim().orEmpty()
         val neighborhoodLimit = query["neighborhood"]?.toIntOrNull()?.coerceIn(0, 1000) ?: 200
-        if (from.isEmpty() || to.isEmpty()) {
-            json(exchange, 400, """{"error":"missing from/to"}""")
-            return
-        }
         try {
+            if (from.isEmpty() || to.isEmpty()) {
+                json(exchange, 400, """{"error":"missing from/to"}""")
+                return
+            }
             val path = wiki.routes.findRoute(from, to)
             val pathJson = path.joinToString(",") { "\"${escapeJson(it)}\"" }
             val pathIds = path.mapNotNull { wiki.store.findIdByTitle(it) }
@@ -165,6 +172,8 @@ class WikiHttpServer(
                 else -> "no route found"
             }
             json(exchange, 404, """{"error":"$reason"}""")
+        } finally {
+            permit.close()
         }
     }
 

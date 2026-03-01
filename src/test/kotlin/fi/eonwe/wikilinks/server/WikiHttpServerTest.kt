@@ -118,6 +118,35 @@ class WikiHttpServerTest {
         }
     }
 
+    @Test
+    fun `api search missing q returns 400`() {
+        withServer { baseUrl ->
+            val response = get("$baseUrl/api/test/search")
+            response.statusCode() shouldBe 400
+        }
+    }
+
+    @Test
+    fun `api route missing params returns 400`() {
+        withServer { baseUrl ->
+            val response = get("$baseUrl/api/test/route?from=Gda%C5%84sk")
+            response.statusCode() shouldBe 400
+        }
+    }
+
+    @Test
+    fun `api rejects unsupported method`() {
+        withServer { baseUrl ->
+            val client = HttpClient.newBuilder().build()
+            val request = HttpRequest.newBuilder()
+                .uri(URI("$baseUrl/api/wikis"))
+                .POST(HttpRequest.BodyPublishers.noBody())
+                .build()
+            val response = client.send(request, HttpResponse.BodyHandlers.ofString())
+            response.statusCode() shouldBe 405
+        }
+    }
+
     private fun withServer(block: (String) -> Unit) {
         val path = Files.createTempFile("wikilinks-server-api-", ".segment")
         path.toFile().deleteOnExit()
