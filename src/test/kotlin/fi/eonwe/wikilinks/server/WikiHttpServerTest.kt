@@ -73,6 +73,17 @@ class WikiHttpServerTest {
     }
 
     @Test
+    fun `api search prefers non-redirect page over redirect`() {
+        withServer { baseUrl ->
+            val response = get("$baseUrl/api/test/search?q=finlanD&limit=5")
+            response.statusCode() shouldBe 200
+            val results = extractResults(response.body())
+            results.isNotEmpty() shouldBe true
+            results.first() shouldBe "Finland"
+        }
+    }
+
+    @Test
     fun `api route returns path`() {
         withServer { baseUrl ->
             val response = get("$baseUrl/api/test/route?from=Gda%C5%84sk&to=Polska")
@@ -155,7 +166,9 @@ class WikiHttpServerTest {
                 listOf(
                     BufferWikiPage.createFrom(1, intArrayOf(2), "Gdańsk", false),
                     BufferWikiPage.createFrom(2, intArrayOf(3), "Polska", false),
-                    BufferWikiPage.createFrom(3, intArrayOf(), "Germany", false)
+                    BufferWikiPage.createFrom(3, intArrayOf(), "Germany", false),
+                    BufferWikiPage.createFrom(4, intArrayOf(), "Finland", false),
+                    BufferWikiPage.createFrom(5, intArrayOf(), "FinlanD", true)
                 ),
                 channel
             )
@@ -176,5 +189,14 @@ class WikiHttpServerTest {
         val client = HttpClient.newBuilder().build()
         val request = HttpRequest.newBuilder().uri(URI(url)).GET().build()
         return client.send(request, HttpResponse.BodyHandlers.ofString())
+    }
+
+    private fun extractResults(body: String): List<String> {
+        val section = Regex("\"results\"\\s*:\\s*\\[(.*?)]").find(body)?.groupValues?.get(1) ?: return emptyList()
+        if (section.isBlank()) return emptyList()
+        return section.split(",")
+            .map { it.trim() }
+            .filter { it.startsWith("\"") && it.endsWith("\"") }
+            .map { it.substring(1, it.length - 1) }
     }
 }

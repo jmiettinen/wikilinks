@@ -17,47 +17,39 @@ class WikiSearchIndex(
         if (trimmed.isEmpty()) return emptyList()
 
         val normalizedQuery = normalizeForSearch(trimmed)
-        val out = ArrayList<String>(limit)
-        val seen = HashSet<String>(limit * 2)
+        val candidates = HashMap<String, ScoredTitle>(limit * 6)
 
         // Fast-path for exact/prefix in canonical title index.
-        if (store.hasTitle(trimmed) && seen.add(trimmed)) {
-            out.add(trimmed)
+        if (store.hasTitle(trimmed)) {
+            addCandidate(candidates, trimmed, -2000)
         }
         val prefixMatches = store.findTitlesByPrefix(trimmed, limit)
         for (m in prefixMatches) {
-            if (seen.add(m)) {
-                out.add(m)
-                if (out.size >= limit) return out
-            }
+            addCandidate(candidates, m, -1000)
+        }
+        if (candidates.size >= limit && normalizedQuery.isEmpty()) {
+            return candidates.values.sortedWith(candidateOrder()).take(limit).map { it.title }
+        }
+        if (normalizedQuery.isEmpty()) {
+            return candidates.values.sortedWith(candidateOrder()).take(limit).map { it.title }
         }
 
-        if (normalizedQuery.isEmpty()) return out
-
         val ids = buckets[bucketKey(normalizedQuery)] ?: IntArray(0)
-        if (ids.isEmpty()) return out
+        if (ids.isEmpty()) {
+            return candidates.values.sortedWith(candidateOrder()).take(limit).map { it.title }
+        }
 
-        val scored = ArrayList<ScoredTitle>(min(ids.size, 128))
         val scanCount = min(ids.size, maxFuzzyCandidates)
         for (i in 0 until scanCount) {
             val id = ids[i]
             val title = store.titleOf(id)
-            if (seen.contains(title)) continue
             val normalizedTitle = normalizeForSearch(title)
             val score = score(normalizedTitle, normalizedQuery)
             if (score >= 0) {
-                scored.add(ScoredTitle(title, score))
+                addCandidate(candidates, title, score)
             }
         }
-        scored.sortWith(compareBy<ScoredTitle> { it.score }.thenBy { it.title })
-
-        for (candidate in scored) {
-            if (seen.add(candidate.title)) {
-                out.add(candidate.title)
-                if (out.size >= limit) break
-            }
-        }
-        return out
+        return candidates.values.sortedWith(candidateOrder()).take(limit).map { it.title }
     }
 
     private fun score(normalizedTitle: String, normalizedQuery: String): Int {
@@ -74,7 +66,24 @@ class WikiSearchIndex(
         return if (distance <= maxDistance) 100 + distance else -1
     }
 
-    private data class ScoredTitle(val title: String, val score: Int)
+    private data class ScoredTitle(val title: String, val score: Int, val isRedirect: Boolean)
+
+    private fun addCandidate(candidates: MutableMap<String, ScoredTitle>, title: String, baseScore: Int) {
+        val id = store.findIdByTitle(title) ?: return
+        val isRedirect = store.isRedirect(id)
+        val redirectPenalty = if (isRedirect) 100 else 0
+        val scored = ScoredTitle(title = title, score = baseScore + redirectPenalty, isRedirect = isRedirect)
+        val existing = candidates[title]
+        if (existing == null || scored.score < existing.score) {
+            candidates[title] = scored
+        }
+    }
+
+    private fun candidateOrder(): Comparator<ScoredTitle> {
+        return compareBy<ScoredTitle> { it.score }
+            .thenBy { it.isRedirect }
+            .thenBy { it.title }
+    }
 
     private class IntArrayBuilder(initial: Int = 16) {
         private var data = IntArray(initial)

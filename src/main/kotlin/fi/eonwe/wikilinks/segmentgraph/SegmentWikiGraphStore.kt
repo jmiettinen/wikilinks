@@ -358,10 +358,9 @@ interface IntCursor {
 private class SegmentIntCursor(
     private val edges: MemorySegment,
     private val start: Long,
-    degree: Int
+    private val degree: Int
 ) : IntCursor {
     private var cursor = 0
-    private val degree = degree
 
     override fun hasNext(): Boolean = cursor < degree
 
