@@ -143,6 +143,22 @@ class SegmentWikiGraphStore private constructor(
         }
     }
 
+    fun forEachTitle(consumer: (Int, String) -> Unit) {
+        for (entry in 0 until nodeCount) {
+            val entryOffset = entry.toLong() * ID_RECORD_SIZE_BYTES
+            val id = idIndex.get(I32, entryOffset + ID_ID_OFFSET)
+            val rank = idIndex.get(I32, entryOffset + ID_RANK_OFFSET)
+            val base = nodeRecordOffset(rank)
+            val titleOffset = nodes.get(I64, base + NODE_TITLE_OFFSET)
+            val titleLen = nodes.get(I32, base + NODE_TITLE_LEN_OFFSET)
+            val bytes = ByteArray(titleLen)
+            for (i in 0 until titleLen) {
+                bytes[i] = titles.get(I8, titleOffset + i)
+            }
+            consumer(id, String(bytes, Charsets.UTF_8))
+        }
+    }
+
     override fun close() {
         arena.close()
         channel.close()

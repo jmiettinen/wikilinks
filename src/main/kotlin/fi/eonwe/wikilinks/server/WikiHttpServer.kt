@@ -1,0 +1,164 @@
+package fi.eonwe.wikilinks.server
+
+import com.sun.net.httpserver.HttpExchange
+import com.sun.net.httpserver.HttpServer
+import fi.eonwe.wikilinks.BadRouteException
+import fi.eonwe.wikilinks.segmentgraph.SegmentWikiRoutes
+import java.net.InetSocketAddress
+import java.net.URI
+import java.net.URLDecoder
+import java.nio.charset.StandardCharsets
+import java.util.concurrent.Executors
+
+class WikiHttpServer(
+    private val registry: ServerWikiRegistry,
+    port: Int = 8080
+) : AutoCloseable {
+    private val server = HttpServer.create(InetSocketAddress(port), 0)
+    private val executor = Executors.newVirtualThreadPerTaskExecutor()
+
+    init {
+        server.executor = executor
+        server.createContext("/api/wikis") { exchange ->
+            handle(exchange) {
+                if (exchange.requestMethod != "GET") {
+                    json(exchange, 405, """{"error":"method not allowed"}""")
+                    return@handle
+                }
+                val namesJson = registry.wikiNames().joinToString(",") { "\"${escapeJson(it)}\"" }
+                json(exchange, 200, """{"wikis":[$namesJson]}""")
+            }
+        }
+        server.createContext("/api/") { exchange ->
+            handle(exchange) {
+                if (exchange.requestMethod != "GET") {
+                    json(exchange, 405, """{"error":"method not allowed"}""")
+                    return@handle
+                }
+                val path = exchange.requestURI.path.removePrefix("/api/")
+                val parts = path.split('/').filter { it.isNotBlank() }
+                if (parts.size != 2) {
+                    json(exchange, 404, """{"error":"not found"}""")
+                    return@handle
+                }
+                val wikiName = parts[0]
+                val action = parts[1]
+                val wiki = registry.wiki(wikiName)
+                if (wiki == null) {
+                    json(exchange, 404, """{"error":"unknown wiki"}""")
+                    return@handle
+                }
+                when (action) {
+                    "search" -> handleSearch(exchange, wiki, wikiName)
+                    "route" -> handleRoute(exchange, wiki.routes)
+                    else -> json(exchange, 404, """{"error":"not found"}""")
+                }
+            }
+        }
+    }
+
+    fun start() {
+        server.start()
+    }
+
+    fun port(): Int = server.address.port
+
+    override fun close() {
+        server.stop(0)
+        executor.shutdown()
+    }
+
+    private fun handleSearch(exchange: HttpExchange, wiki: ServerWikiRegistry.LoadedWiki, wikiName: String) {
+        val query = parseQuery(exchange.requestURI)
+        val q = query["q"]?.trim().orEmpty()
+        if (q.isEmpty()) {
+            json(exchange, 400, """{"error":"missing q"}""")
+            return
+        }
+        val limit = query["limit"]?.toIntOrNull()?.coerceIn(1, 100) ?: 20
+        val matches = wiki.searchIndex.search(q, limit)
+        val titles = matches.joinToString(",") { "\"${escapeJson(it)}\"" }
+        json(exchange, 200, """{"wiki":"${escapeJson(wikiName)}","results":[$titles]}""")
+    }
+
+    private fun handleRoute(exchange: HttpExchange, routes: SegmentWikiRoutes) {
+        val query = parseQuery(exchange.requestURI)
+        val from = query["from"]?.trim().orEmpty()
+        val to = query["to"]?.trim().orEmpty()
+        if (from.isEmpty() || to.isEmpty()) {
+            json(exchange, 400, """{"error":"missing from/to"}""")
+            return
+        }
+        try {
+            val path = routes.findRoute(from, to)
+            val nodes = path.joinToString(",") { "\"${escapeJson(it)}\"" }
+            json(exchange, 200, """{"path":[$nodes]}""")
+        } catch (e: BadRouteException) {
+            val reason = when {
+                !e.startExists() && !e.endExist() -> "start and end do not exist"
+                !e.startExists() -> "start does not exist"
+                !e.endExist() -> "end does not exist"
+                else -> "no route found"
+            }
+            json(exchange, 404, """{"error":"$reason"}""")
+        }
+    }
+
+    private fun json(exchange: HttpExchange, status: Int, body: String) {
+        val bytes = body.toByteArray(StandardCharsets.UTF_8)
+        exchange.responseHeaders.add("Content-Type", "application/json; charset=utf-8")
+        exchange.sendResponseHeaders(status, bytes.size.toLong())
+        exchange.responseBody.use { out ->
+            out.write(bytes)
+        }
+    }
+
+    private fun handle(exchange: HttpExchange, block: () -> Unit) {
+        try {
+            block()
+        } catch (_: IllegalArgumentException) {
+            json(exchange, 400, """{"error":"bad request"}""")
+        } catch (_: Throwable) {
+            json(exchange, 500, """{"error":"internal error"}""")
+        } finally {
+            exchange.close()
+        }
+    }
+
+    companion object {
+        private fun parseQuery(uri: URI): Map<String, String> {
+            val query = uri.rawQuery ?: return emptyMap()
+            if (query.isBlank()) return emptyMap()
+            return query.split('&')
+                .asSequence()
+                .filter { it.isNotBlank() }
+                .associate { part ->
+                    val idx = part.indexOf('=')
+                    if (idx < 0) {
+                        decode(part) to ""
+                    } else {
+                        decode(part.substring(0, idx)) to decode(part.substring(idx + 1))
+                    }
+                }
+        }
+
+        private fun decode(value: String): String {
+            return URLDecoder.decode(value, StandardCharsets.UTF_8)
+        }
+
+        private fun escapeJson(value: String): String {
+            val out = StringBuilder(value.length + 8)
+            for (c in value) {
+                when (c) {
+                    '\\' -> out.append("\\\\")
+                    '"' -> out.append("\\\"")
+                    '\n' -> out.append("\\n")
+                    '\r' -> out.append("\\r")
+                    '\t' -> out.append("\\t")
+                    else -> out.append(c)
+                }
+            }
+            return out.toString()
+        }
+    }
+}

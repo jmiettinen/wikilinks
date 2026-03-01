@@ -4,6 +4,8 @@ import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.ProgramResult
 import com.github.ajalt.clikt.core.main
 import com.github.ajalt.clikt.core.subcommands
+import com.github.ajalt.clikt.parameters.arguments.argument
+import com.github.ajalt.clikt.parameters.arguments.multiple
 import com.github.ajalt.clikt.parameters.options.default
 import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
@@ -15,6 +17,9 @@ import fi.eonwe.wikilinks.segmentgraph.GraphDataSource
 import fi.eonwe.wikilinks.segmentgraph.SegmentStoreGraphDataSource
 import fi.eonwe.wikilinks.segmentgraph.SegmentWikiGraphSerialization
 import fi.eonwe.wikilinks.segmentgraph.SegmentWikiRoutes
+import fi.eonwe.wikilinks.server.ServerWikiInputParser
+import fi.eonwe.wikilinks.server.WikiHttpServer
+import fi.eonwe.wikilinks.server.ServerWikiRegistry
 import fi.eonwe.wikilinks.utils.Helpers
 import java.io.BufferedInputStream
 import java.io.BufferedReader
@@ -51,10 +56,44 @@ object Main {
 
     private class WikilinksCommand : CliktCommand(name = "wikilinks") {
         init {
-            subcommands(ConvertCommand(), QueryCommand())
+            subcommands(ConvertCommand(), QueryCommand(), ServerCommand())
         }
 
         override fun run() = Unit
+    }
+
+    private class ServerCommand : CliktCommand(name = "server") {
+        private val wikiPairs by argument(help = "Repeated wiki name/file pairs: <name1> <file1> ...").multiple(
+            required = true
+        )
+        private val port by option("--port", help = "HTTP server port").default("8080")
+
+        override fun run() {
+            val inputs = try {
+                ServerWikiInputParser.parse(wikiPairs)
+            } catch (e: IllegalArgumentException) {
+                System.err.println(e.message)
+                throw ProgramResult(GENERAL_ERROR)
+            }
+            val parsedPort = port.toIntOrNull()
+            if (parsedPort == null || parsedPort !in 1..65535) {
+                System.err.println("Invalid --port '$port', expected integer in 1..65535")
+                throw ProgramResult(GENERAL_ERROR)
+            }
+            val registry = ServerWikiRegistry.open(inputs)
+            val http = WikiHttpServer(registry, parsedPort)
+            Runtime.getRuntime().addShutdownHook(
+                Thread {
+                    http.close()
+                    registry.close()
+                }
+            )
+            http.start()
+            println("Server listening on http://0.0.0.0:${http.port()}")
+            println("Loaded ${registry.wikiNames().size} wiki graph(s): ${registry.wikiNames().joinToString()}")
+            // Keep command running until terminated.
+            Thread.currentThread().join()
+        }
     }
 
     private class ConvertCommand : CliktCommand(name = "convert") {
@@ -389,4 +428,3 @@ object Main {
         exitProcess(1)
     }
 }
-
