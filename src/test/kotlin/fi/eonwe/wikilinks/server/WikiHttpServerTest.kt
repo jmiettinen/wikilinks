@@ -55,6 +55,27 @@ class WikiHttpServerTest {
             val response = get("$baseUrl/api/test/route?from=Gda%C5%84sk&to=Polska")
             response.statusCode() shouldBe 200
             response.body().contains("\"path\":[\"Gdańsk\",\"Polska\"]") shouldBe true
+            response.body().contains("\"nodes\"") shouldBe true
+            response.body().contains("\"edges\"") shouldBe true
+        }
+    }
+
+    @Test
+    fun `api route includes outgoing neighborhood`() {
+        withServer { baseUrl ->
+            val response = get("$baseUrl/api/test/route?from=Gda%C5%84sk&to=Polska&neighborhood=10")
+            response.statusCode() shouldBe 200
+            response.body().contains("\"title\":\"Germany\"") shouldBe true
+            response.body().contains("\"kind\":\"neighbor\"") shouldBe true
+        }
+    }
+
+    @Test
+    fun `api route can disable neighborhood`() {
+        withServer { baseUrl ->
+            val response = get("$baseUrl/api/test/route?from=Gda%C5%84sk&to=Polska&neighborhood=0")
+            response.statusCode() shouldBe 200
+            response.body().contains("\"title\":\"Germany\"") shouldBe false
         }
     }
 
@@ -81,7 +102,7 @@ class WikiHttpServerTest {
             SegmentWikiGraphSerialization().serialize(
                 listOf(
                     BufferWikiPage.createFrom(1, intArrayOf(2), "Gdańsk", false),
-                    BufferWikiPage.createFrom(2, intArrayOf(), "Polska", false),
+                    BufferWikiPage.createFrom(2, intArrayOf(3), "Polska", false),
                     BufferWikiPage.createFrom(3, intArrayOf(), "Germany", false)
                 ),
                 channel

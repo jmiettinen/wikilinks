@@ -50,7 +50,7 @@ class WikiHttpServer(
                 }
                 when (action) {
                     "search" -> handleSearch(exchange, wiki, wikiName)
-                    "route" -> handleRoute(exchange, wiki.routes)
+                    "route" -> handleRoute(exchange, wiki)
                     else -> json(exchange, 404, """{"error":"not found"}""")
                 }
             }
@@ -81,18 +81,56 @@ class WikiHttpServer(
         json(exchange, 200, """{"wiki":"${escapeJson(wikiName)}","results":[$titles]}""")
     }
 
-    private fun handleRoute(exchange: HttpExchange, routes: SegmentWikiRoutes) {
+    private fun handleRoute(exchange: HttpExchange, wiki: ServerWikiRegistry.LoadedWiki) {
         val query = parseQuery(exchange.requestURI)
         val from = query["from"]?.trim().orEmpty()
         val to = query["to"]?.trim().orEmpty()
+        val neighborhoodLimit = query["neighborhood"]?.toIntOrNull()?.coerceIn(0, 1000) ?: 200
         if (from.isEmpty() || to.isEmpty()) {
             json(exchange, 400, """{"error":"missing from/to"}""")
             return
         }
         try {
-            val path = routes.findRoute(from, to)
-            val nodes = path.joinToString(",") { "\"${escapeJson(it)}\"" }
-            json(exchange, 200, """{"path":[$nodes]}""")
+            val path = wiki.routes.findRoute(from, to)
+            val pathJson = path.joinToString(",") { "\"${escapeJson(it)}\"" }
+            val pathIds = path.mapNotNull { wiki.store.findIdByTitle(it) }
+            val pathIdSet = pathIds.toHashSet()
+            val neighborIds = LinkedHashSet<Int>(neighborhoodLimit)
+            val edgeJson = ArrayList<String>(pathIds.size + neighborhoodLimit)
+
+            for (i in 0 until pathIds.size - 1) {
+                edgeJson.add("""{"from":${pathIds[i]},"to":${pathIds[i + 1]},"kind":"path"}""")
+            }
+
+            if (neighborhoodLimit > 0) {
+                for (pathId in pathIds) {
+                    val cursor = wiki.store.outNeighbors(pathId)
+                    while (cursor.hasNext()) {
+                        val targetId = cursor.nextInt()
+                        if (!pathIdSet.contains(targetId) && neighborIds.size < neighborhoodLimit) {
+                            if (neighborIds.add(targetId)) {
+                                edgeJson.add("""{"from":$pathId,"to":$targetId,"kind":"neighbor"}""")
+                            }
+                        }
+                    }
+                    if (neighborIds.size >= neighborhoodLimit) break
+                }
+            }
+
+            val nodeJson = ArrayList<String>(pathIds.size + neighborIds.size)
+            for (id in pathIds) {
+                val title = wiki.store.titleOf(id)
+                nodeJson.add("""{"id":$id,"title":"${escapeJson(title)}","kind":"path"}""")
+            }
+            for (id in neighborIds) {
+                val title = wiki.store.titleOf(id)
+                nodeJson.add("""{"id":$id,"title":"${escapeJson(title)}","kind":"neighbor"}""")
+            }
+            json(
+                exchange,
+                200,
+                """{"path":[$pathJson],"nodes":[${nodeJson.joinToString(",")}],"edges":[${edgeJson.joinToString(",")}]}"""
+            )
         } catch (e: BadRouteException) {
             val reason = when {
                 !e.startExists() && !e.endExist() -> "start and end do not exist"
