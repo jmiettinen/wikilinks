@@ -1,0 +1,108 @@
+:root {
+  --bg: #f4f6f8;
+  --panel: #ffffff;
+  --ink: #13233a;
+  --muted: #5a6878;
+  --accent: #0b6e4f;
+  --accent-soft: #d9f4ea;
+  --path: #c84c09;
+  --neighbor: #5a6878;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  color: var(--ink);
+  background: radial-gradient(circle at 80% 0%, #d7e8ff 0%, var(--bg) 45%);
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 16px;
+  min-height: 100vh;
+  padding: 16px;
+}
+
+.controls {
+  background: var(--panel);
+  border: 1px solid #c9d5e2;
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+h1 {
+  margin: 0 0 8px 0;
+  font-size: 1.25rem;
+}
+
+label {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+input, select, button {
+  width: 100%;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid #b6c5d5;
+  font-size: 0.95rem;
+}
+
+button {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button:hover {
+  filter: brightness(1.05);
+}
+
+.status {
+  margin-top: 8px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.route {
+  margin-top: 6px;
+  font-size: 0.9rem;
+  line-height: 1.35;
+}
+
+.graph-wrap {
+  background: var(--panel);
+  border: 1px solid #c9d5e2;
+  border-radius: 12px;
+  min-height: 70vh;
+  overflow: hidden;
+}
+
+#graph {
+  width: 100%;
+  height: 100%;
+  min-height: 70vh;
+}
+
+@media (max-width: 900px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+  .controls {
+    order: 1;
+  }
+  .graph-wrap {
+    order: 2;
+    min-height: 60vh;
+  }
+}

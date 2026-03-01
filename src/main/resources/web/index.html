@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WikiLinks Route Explorer</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <link rel="stylesheet" href="https://unpkg.com/vis-network@9.1.9/styles/vis-network.min.css">
+</head>
+<body>
+  <main class="layout">
+    <section class="controls">
+      <h1>WikiLinks Route Explorer</h1>
+      <label for="wiki-select">Wiki</label>
+      <select id="wiki-select"></select>
+
+      <label for="start-input">Start article</label>
+      <input id="start-input" type="text" placeholder="Type article title" list="start-suggestions" autocomplete="off">
+      <datalist id="start-suggestions"></datalist>
+
+      <label for="end-input">End article</label>
+      <input id="end-input" type="text" placeholder="Type article title" list="end-suggestions" autocomplete="off">
+      <datalist id="end-suggestions"></datalist>
+
+      <label for="neighbor-input">Neighborhood size</label>
+      <input id="neighbor-input" type="number" min="0" max="1000" value="200">
+
+      <button id="find-route-btn">Find Shortest Path</button>
+      <div id="status" class="status">Ready.</div>
+      <div id="route-text" class="route"></div>
+    </section>
+    <section class="graph-wrap">
+      <div id="graph"></div>
+    </section>
+  </main>
+
+  <script src="https://unpkg.com/vis-network@9.1.9/standalone/umd/vis-network.min.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>

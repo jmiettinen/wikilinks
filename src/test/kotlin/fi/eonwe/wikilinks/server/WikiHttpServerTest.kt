@@ -14,6 +14,29 @@ import java.nio.file.StandardOpenOption
 
 class WikiHttpServerTest {
     @Test
+    fun `ui root serves html`() {
+        withServer { baseUrl ->
+            val response = get("$baseUrl/")
+            response.statusCode() shouldBe 200
+            response.body().contains("WikiLinks Route Explorer") shouldBe true
+            response.body().contains("find-route-btn") shouldBe true
+        }
+    }
+
+    @Test
+    fun `ui static assets are served`() {
+        withServer { baseUrl ->
+            val js = get("$baseUrl/static/app.js")
+            js.statusCode() shouldBe 200
+            js.body().contains("loadWikis") shouldBe true
+
+            val css = get("$baseUrl/static/app.css")
+            css.statusCode() shouldBe 200
+            css.body().contains(".layout") shouldBe true
+        }
+    }
+
+    @Test
     fun `api wikis returns configured names`() {
         withServer { baseUrl ->
             val response = get("$baseUrl/api/wikis")

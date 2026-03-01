@@ -8,6 +8,7 @@ import java.net.InetSocketAddress
 import java.net.URI
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
+import java.util.Locale
 import java.util.concurrent.Executors
 
 class WikiHttpServer(
@@ -19,6 +20,31 @@ class WikiHttpServer(
 
     init {
         server.executor = executor
+        server.createContext("/") { exchange ->
+            handle(exchange) {
+                if (exchange.requestMethod != "GET") {
+                    json(exchange, 405, """{"error":"method not allowed"}""")
+                    return@handle
+                }
+                val path = exchange.requestURI.path
+                when {
+                    path == "/" || path == "/index.html" -> serveStatic(exchange, "web/index.html")
+                    path.startsWith("/static/") -> {
+                        val rel = path.removePrefix("/static/")
+                        if (rel.isBlank() || rel.contains("..")) {
+                            text(exchange, 404, "Not found", "text/plain; charset=utf-8")
+                        } else {
+                            serveStatic(exchange, "web/$rel")
+                        }
+                    }
+                    path.startsWith("/api/") -> {
+                        // Routed by more specific /api/* handlers.
+                        text(exchange, 404, "Not found", "text/plain; charset=utf-8")
+                    }
+                    else -> text(exchange, 404, "Not found", "text/plain; charset=utf-8")
+                }
+            }
+        }
         server.createContext("/api/wikis") { exchange ->
             handle(exchange) {
                 if (exchange.requestMethod != "GET") {
@@ -143,9 +169,27 @@ class WikiHttpServer(
     }
 
     private fun json(exchange: HttpExchange, status: Int, body: String) {
+        text(exchange, status, body, "application/json; charset=utf-8")
+    }
+
+    private fun text(exchange: HttpExchange, status: Int, body: String, contentType: String) {
         val bytes = body.toByteArray(StandardCharsets.UTF_8)
-        exchange.responseHeaders.add("Content-Type", "application/json; charset=utf-8")
+        exchange.responseHeaders.add("Content-Type", contentType)
         exchange.sendResponseHeaders(status, bytes.size.toLong())
+        exchange.responseBody.use { out ->
+            out.write(bytes)
+        }
+    }
+
+    private fun serveStatic(exchange: HttpExchange, resourcePath: String) {
+        val stream = WikiHttpServer::class.java.classLoader.getResourceAsStream(resourcePath)
+        if (stream == null) {
+            text(exchange, 404, "Not found", "text/plain; charset=utf-8")
+            return
+        }
+        val bytes = stream.use { it.readAllBytes() }
+        exchange.responseHeaders.add("Content-Type", contentType(resourcePath))
+        exchange.sendResponseHeaders(200, bytes.size.toLong())
         exchange.responseBody.use { out ->
             out.write(bytes)
         }
@@ -197,6 +241,16 @@ class WikiHttpServer(
                 }
             }
             return out.toString()
+        }
+
+        private fun contentType(path: String): String {
+            return when (path.substringAfterLast('.').lowercase(Locale.ROOT)) {
+                "html" -> "text/html; charset=utf-8"
+                "css" -> "text/css; charset=utf-8"
+                "js" -> "application/javascript; charset=utf-8"
+                "json" -> "application/json; charset=utf-8"
+                else -> "application/octet-stream"
+            }
         }
     }
 }
