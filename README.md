@@ -41,6 +41,17 @@ For Wikimedia content exports that are split across several `.xml.bz2` files, pa
 java -jar build/libs/wikilinks.jar convert --input data/enwiki-2026-06-01-content-bzip2 --input-format xml --output data/enwiki-2026-06-01.segment --output-format=segment
 ```
 
+The same conversion is available through Gradle for reproducible build and deployment workflows:
+```bash
+./gradlew convertWiki \
+  -PwikiXmlInput=data/enwiki-2026-06-01-content-bzip2 \
+  -PwikiBinaryOutput=build/wikis/enwiki-2026-06-01.segment
+```
+
+`convertWiki` defaults to `data/wiki.xml.bz2` and `build/wikis/wiki.segment`. It also accepts
+`-PwikiIndexInput=...`, `-PwikiNoIndex=true`, `-PwikiInputFormat=xml`, `-PwikiOutputFormat=segment`, and
+`-PwikiConvertMaxHeap=4g`.
+
 This will take quite a bit of time, around one to two hours for English Wikipedia.
 
 After you're done with that, you can run 
