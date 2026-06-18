@@ -2,6 +2,7 @@
 !Dockerfile
 !Dockerfile.graalvm
 !.dockerignore
+!jvm.options
 !docker/
 !docker/**
 !build/

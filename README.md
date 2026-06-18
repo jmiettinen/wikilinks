@@ -78,7 +78,9 @@ Build a runtime image after one or more wiki graph files exist under `build/wiki
 ```
 
 The image bundles `build/libs/wikilinks.jar` and `build/wikis/*.segment`. On startup it serves every bundled
-segment file using the filename stem as the wiki name, exposes port `8080`, and honors `PORT` and `JAVA_OPTS`.
+segment file using the filename stem as the wiki name, exposes port `8080`, and uses `jvm.options` tuned for
+small containers. It honors `PORT`, `JAVA_OPTS`, and `MAX_IN_FLIGHT_ROUTES`; the image default allows one
+concurrent route query.
 To run a local image:
 ```bash
 docker run --rm -p 8080:8080 wikilinks:enwiki

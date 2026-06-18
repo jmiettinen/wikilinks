@@ -1,0 +1,16 @@
+-XX:+UseSerialGC
+-XX:ActiveProcessorCount=1
+-Xms64m
+-Xmx64m
+-XX:MaxMetaspaceSize=40m
+-XX:CompressedClassSpaceSize=16m
+-XX:ReservedCodeCacheSize=24m
+-XX:MaxDirectMemorySize=16m
+-Xss256k
+-XX:+ExitOnOutOfMemoryError
+-XX:TieredStopAtLevel=1
+-XX:CICompilerCount=1
+--enable-native-access=ALL-UNNAMED
+-Djdk.virtualThreadScheduler.parallelism=1
+-Djdk.virtualThreadScheduler.maxPoolSize=32
+-XX:NativeMemoryTracking=summary

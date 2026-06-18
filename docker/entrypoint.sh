@@ -1,11 +1,15 @@
 #!/bin/sh
 set -eu
 
+BASE_JAVA_OPTS="$(tr '\n' ' ' </app/jvm.options)"
+JAVA_COMMAND="java ${BASE_JAVA_OPTS} ${JAVA_OPTS:-}"
+
 if [ "$#" -gt 0 ]; then
-  exec java ${JAVA_OPTS:-} -jar /app/wikilinks.jar "$@"
+  # shellcheck disable=SC2086
+  exec ${JAVA_COMMAND} -jar /app/wikilinks.jar "$@"
 fi
 
-set -- server --port "${PORT:-8080}"
+set -- server --port "${PORT:-8080}" --max-in-flight-routes "${MAX_IN_FLIGHT_ROUTES:-1}"
 found_wiki=0
 for wiki_file in /app/wikis/*.segment; do
   if [ ! -f "$wiki_file" ]; then
@@ -21,4 +25,5 @@ if [ "$found_wiki" -eq 0 ]; then
   exit 1
 fi
 
-exec java ${JAVA_OPTS:-} -jar /app/wikilinks.jar "$@"
+# shellcheck disable=SC2086
+exec ${JAVA_COMMAND} -jar /app/wikilinks.jar "$@"
