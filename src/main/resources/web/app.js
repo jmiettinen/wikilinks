@@ -167,7 +167,7 @@ async function findRoute() {
   routeTextEl.textContent = "";
   try {
     const payload = await api(
-      `/api/${encodeURIComponent(wiki)}/route?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&neighborhood=${Number.isFinite(neighborhood) ? neighborhood : 200}`
+      `/api/${encodeURIComponent(wiki)}/route?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&neighborhood=${Number.isFinite(neighborhood) ? neighborhood : 0}`
     );
     const path = payload.path || [];
     if (path.length === 0) {

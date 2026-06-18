@@ -113,13 +113,14 @@ class WikiHttpServerTest {
     }
 
     @Test
-    fun `api route returns path`() {
+    fun `api route returns path without neighborhood by default`() {
         withServer { baseUrl ->
             val response = get("$baseUrl/api/test/route?from=Gda%C5%84sk&to=Polska")
             response.statusCode() shouldBe 200
             response.body().contains("\"path\":[\"Gdańsk\",\"Polska\"]") shouldBe true
             response.body().contains("\"nodes\"") shouldBe true
             response.body().contains("\"edges\"") shouldBe true
+            response.body().contains("\"title\":\"Germany\"") shouldBe false
         }
     }
 

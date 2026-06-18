@@ -150,7 +150,7 @@ class WikiHttpServer(
         val query = parseQuery(exchange.requestURI)
         val from = query["from"]?.trim().orEmpty()
         val to = query["to"]?.trim().orEmpty()
-        val neighborhoodLimit = query["neighborhood"]?.toIntOrNull()?.coerceIn(0, 1000) ?: 200
+        val neighborhoodLimit = query["neighborhood"]?.toIntOrNull()?.coerceIn(0, 1000) ?: DEFAULT_NEIGHBORHOOD_LIMIT
         try {
             if (from.isEmpty() || to.isEmpty()) {
                 json(exchange, 400, """{"error":"missing from/to"}""")
@@ -293,5 +293,7 @@ class WikiHttpServer(
                 else -> "application/octet-stream"
             }
         }
+
+        private const val DEFAULT_NEIGHBORHOOD_LIMIT = 0
     }
 }
