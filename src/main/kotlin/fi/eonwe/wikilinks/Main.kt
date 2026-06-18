@@ -105,7 +105,7 @@ object Main {
 
     private class ConvertCommand : CliktCommand(name = "convert") {
         private val inputFile by option("--input", help = "Input file path")
-            .file(canBeFile = true, canBeDir = false, mustExist = true, mustBeReadable = true, mustBeWritable = false)
+            .file(canBeFile = true, canBeDir = true, mustExist = true, mustBeReadable = true, mustBeWritable = false)
         private val inputFormatName by option("--input-format", help = "Input format: xml | buffer | segment")
             .default("xml")
         private val outputFile by option("--output", help = "Output file path")
@@ -131,16 +131,34 @@ object Main {
 
             val inputFormat = parseInputFormat(inputFormatName)
             val outputFormat = parseOutputFormat(outputFormatName)
+            val xmlInputs = if (inputFormat == InputFormat.XML) {
+                try {
+                    WikiInputFiles.resolveXmlInputs(input)
+                } catch (e: IllegalArgumentException) {
+                    System.err.println(e.message)
+                    throw ProgramResult(GENERAL_ERROR)
+                }
+            } else {
+                listOf(input)
+            }
+            if (inputFormat != InputFormat.XML && input.isDirectory) {
+                System.err.println("--input can only be a directory with --input-format xml")
+                throw ProgramResult(GENERAL_ERROR)
+            }
             if ((indexInput != null || noIndex) && inputFormat != InputFormat.XML) {
                 System.err.println("--index and --no-index are only valid with --input-format xml")
                 throw ProgramResult(GENERAL_ERROR)
             }
-            if (inputFormat == InputFormat.XML && (indexInput != null || noIndex) && !input.name.endsWith(".bz2")) {
+            if (indexInput != null && xmlInputs.size != 1) {
+                System.err.println("--index can only be used with a single .bz2 XML input")
+                throw ProgramResult(GENERAL_ERROR)
+            }
+            if (inputFormat == InputFormat.XML && (indexInput != null || noIndex) && xmlInputs.any { !it.name.endsWith(".bz2") }) {
                 System.err.println("--index and --no-index are only valid for .bz2 XML input")
                 throw ProgramResult(GENERAL_ERROR)
             }
 
-            val source = createInputSource(input, inputFormat, indexInput, noIndex)
+            val source = createInputSource(xmlInputs, inputFormat, indexInput, noIndex)
             source.use {
                 writeConvertedGraph(output, outputFormat, it)
             }
@@ -201,20 +219,20 @@ object Main {
     }
 
     private fun createInputSource(
-        input: File,
+        inputs: List<File>,
         inputFormat: InputFormat,
         indexInput: File?,
         noIndex: Boolean
     ): GraphDataSource {
         return when (inputFormat) {
             InputFormat.XML -> {
-                val pages = readXml(input, input.name.endsWith(".bz2"), indexInput, noIndex)
+                val pages = readXml(inputs, indexInput, noIndex)
                 pages.sort()
                 BufferPagesGraphDataSource(pages)
             }
 
-            InputFormat.BUFFER -> BufferPagesGraphDataSource(readBufferSerialized(input))
-            InputFormat.SEGMENT -> SegmentStoreGraphDataSource(SegmentWikiGraphSerialization.open(input.toPath()))
+            InputFormat.BUFFER -> BufferPagesGraphDataSource(readBufferSerialized(inputs.single()))
+            InputFormat.SEGMENT -> SegmentStoreGraphDataSource(SegmentWikiGraphSerialization.open(inputs.single().toPath()))
         }
     }
 
@@ -275,24 +293,24 @@ object Main {
     }
 
     private fun readXml(
-        inputFile: File,
-        isBzipStream: Boolean,
+        inputFiles: List<File>,
         indexInput: File?,
         noIndex: Boolean
     ): MutableList<BufferWikiPage> {
         try {
-            val result = if (isBzipStream) {
+            val result = if (inputFiles.all { it.name.endsWith(".bz2") }) {
                 val indexSelection = when {
                     noIndex -> WikiReader.IndexSelection.DISABLED
                     indexInput != null -> WikiReader.IndexSelection.EXPLICIT
                     else -> WikiReader.IndexSelection.AUTO
                 }
                 WikiReader.readPagesWithStats(
-                    source = FileCompressedSource(inputFile.toPath()),
+                    sources = inputFiles.map { FileCompressedSource(it.toPath()) },
                     indexSelection = indexSelection,
                     explicitIndexPath = indexInput?.toPath()
                 )
             } else {
+                val inputFile = inputFiles.single()
                 inputFile.inputStream().use { fis ->
                     BufferedInputStream(fis).use { bis ->
                         WikiProcessor.readPagesWithStats(bis)

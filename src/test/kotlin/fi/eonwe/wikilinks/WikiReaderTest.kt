@@ -7,6 +7,7 @@ import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.comparables.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
 import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream
+import org.apache.commons.compress.compressors.bzip2.BZip2CompressorOutputStream
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestFactory
@@ -44,6 +45,14 @@ class WikiReaderTest {
     }
 
     private fun sourceFrom(bytes: ByteArray): CompressedSource = ByteBufferCompressedSource(ByteBuffer.wrap(bytes))
+
+    private fun writeBzip2Xml(path: Path, xml: String) {
+        Files.newOutputStream(path).use { output ->
+            BZip2CompressorOutputStream(output).use { bzip2 ->
+                bzip2.write(xml.toByteArray(Charsets.UTF_8))
+            }
+        }
+    }
 
     private fun usingTempCompressedFile(testData: TestData, block: (Path) -> Unit) {
         val bytes = usingTestDump(testData) { it.readAllBytes() }
@@ -334,6 +343,68 @@ class WikiReaderTest {
                 } finally {
                     Files.deleteIfExists(badIndex)
                 }
+            }
+        }
+    }
+
+    @Nested
+    inner class MultiFileReading {
+        @Test
+        fun `resolves links and redirects across split xml files`() {
+            val tempDir = Files.createTempDirectory("wikireader-split-test-")
+            val first = tempDir.resolve("testwiki-2026-06-01-p1p2.xml.bz2")
+            val second = tempDir.resolve("testwiki-2026-06-01-p3p4.xml.bz2")
+            try {
+                writeBzip2Xml(
+                    first,
+                    """
+                    <mediawiki>
+                      <siteinfo><sitename>TestWiki</sitename></siteinfo>
+                      <page>
+                        <title>Alpha</title>
+                        <ns>0</ns>
+                        <id>1</id>
+                        <revision><text xml:space="preserve">[[Beta]]</text></revision>
+                      </page>
+                    </mediawiki>
+                    """.trimIndent()
+                )
+                writeBzip2Xml(
+                    second,
+                    """
+                    <mediawiki>
+                      <siteinfo><sitename>TestWiki</sitename></siteinfo>
+                      <page>
+                        <title>Beta</title>
+                        <ns>0</ns>
+                        <id>2</id>
+                        <revision><text xml:space="preserve">Plain text</text></revision>
+                      </page>
+                      <page>
+                        <title>Gamma</title>
+                        <ns>0</ns>
+                        <id>3</id>
+                        <revision><text xml:space="preserve">#REDIRECT [[Alpha]]</text></revision>
+                      </page>
+                    </mediawiki>
+                    """.trimIndent()
+                )
+
+                val pages = WikiReader.readPagesWithStats(
+                    sources = listOf(FileCompressedSource(first), FileCompressedSource(second)),
+                    config = ProcessingConfig(parallelism = 2U, maxBlocksWaiting = 2U),
+                    indexSelection = WikiReader.IndexSelection.DISABLED
+                ).pages
+
+                canonicalizePagesByTitle(pages) shouldBe mapOf(
+                    "Alpha" to CanonicalPage(isRedirect = false, links = listOf("Beta")),
+                    "Beta" to CanonicalPage(isRedirect = false, links = emptyList()),
+                    "Gamma" to CanonicalPage(isRedirect = true, links = listOf("Alpha"))
+                )
+            } finally {
+                Files.deleteIfExists(second)
+                Files.deleteIfExists(first)
+                Files.deleteIfExists(tempDir)
             }
         }
     }

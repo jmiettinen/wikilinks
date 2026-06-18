@@ -36,6 +36,11 @@ To convert `mywikidumnp.xml.bz2` to a more compact format `my_wiki.dump`, run
 java -jar build/libs/wikilinks.jar convert --input mywikidump.xml.bz2 --input-format xml --output data/mywikidump.segment --output-format=segment 
 ```
 
+For Wikimedia content exports that are split across several `.xml.bz2` files, pass the directory containing the parts:
+```
+java -jar build/libs/wikilinks.jar convert --input data/enwiki-2026-06-01-content-bzip2 --input-format xml --output data/enwiki-2026-06-01.segment --output-format=segment
+```
+
 This will take quite a bit of time, around one to two hours for English Wikipedia.
 
 After you're done with that, you can run 
@@ -90,4 +95,3 @@ Things to improve, clean up, etc
 - [ ] Move Wikipedia XML -> serialization format to another main
 - [ ] Write web interface for querying routes and available articles
 - [X] Port to Bazel or similar build system
-

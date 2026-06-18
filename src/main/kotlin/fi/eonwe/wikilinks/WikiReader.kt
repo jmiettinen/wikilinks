@@ -77,6 +77,49 @@ object WikiReader {
         indexSelection: IndexSelection = IndexSelection.AUTO,
         explicitIndexPath: Path? = null
     ): WikiProcessor.ReadPagesResult {
+        openXmlInputStream(source, config, indexSelection, explicitIndexPath).use {
+            return WikiProcessor.readPagesWithStats(it)
+        }
+    }
+
+    fun readPagesWithStats(
+        sources: List<FileCompressedSource>,
+        config: ProcessingConfig = defaultProcessingConfig,
+        indexSelection: IndexSelection = IndexSelection.AUTO,
+        explicitIndexPath: Path? = null
+    ): WikiProcessor.ReadPagesResult {
+        require(sources.isNotEmpty()) { "At least one compressed source must be provided" }
+        require(explicitIndexPath == null || sources.size == 1) {
+            "Explicit index path can only be used with a single compressed source"
+        }
+
+        val openInputs = sources.map { source ->
+            {
+                openXmlInputStream(source, config, indexSelection, explicitIndexPath)
+            }
+        }
+        return WikiProcessor.readPagesWithStatsFrom(openInputs)
+    }
+
+    private fun openXmlInputStream(
+        source: FileCompressedSource,
+        config: ProcessingConfig,
+        indexSelection: IndexSelection,
+        explicitIndexPath: Path?
+    ): InputStream {
+        val ranges = substreamRangesFor(source, indexSelection, explicitIndexPath)
+        if (ranges.isEmpty()) {
+            return BZip2CompressorInputStream(source.openSequential(), true)
+        }
+
+        return ParallelBzip2InputStream(source, ranges, config)
+    }
+
+    private fun substreamRangesFor(
+        source: FileCompressedSource,
+        indexSelection: IndexSelection,
+        explicitIndexPath: Path?
+    ): List<OpenEndRange<Long>> {
         val ranges: List<OpenEndRange<Long>> = when (indexSelection) {
             IndexSelection.DISABLED -> emptyList()
             IndexSelection.EXPLICIT -> {
@@ -93,13 +136,7 @@ object WikiReader {
             }
         }
 
-        if (ranges.isEmpty()) {
-            return readSingleThreaded(source)
-        }
-
-        ParallelBzip2InputStream(source, ranges, config).use {
-            return WikiProcessor.readPagesWithStats(it)
-        }
+        return ranges
     }
 
     private fun substreamRangesFromIndex(source: CompressedSource, indexPath: Path): List<OpenEndRange<Long>> {

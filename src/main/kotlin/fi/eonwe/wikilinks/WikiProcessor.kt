@@ -16,6 +16,9 @@ import java.util.concurrent.atomic.AtomicBoolean
 /**
  */
 class WikiProcessor private constructor() {
+    private val titleToPage = HashMap<String, PagePointer>(12000000)
+    private var nextInternalId = 0
+
     data class GraphStatistics(
         val articleCount: Int,
         val redirectCount: Int,
@@ -30,16 +33,6 @@ class WikiProcessor private constructor() {
     )
 
     fun preProcess(input: InputStream): MutableMap<String, PagePointer> {
-        val titleToPage = HashMap<String, PagePointer>(12000000)
-        var nextInternalId = 0
-
-        fun nextPageId(): Int {
-            if (nextInternalId == Int.MAX_VALUE) {
-                throw IllegalStateException("Too many pages to index with 32-bit ids")
-            }
-            return nextInternalId++
-        }
-
         val parser = WikiXMLParser(input) { article, siteinfo ->
             if (article.isMain) {
                 val text = article.text ?: ""
@@ -72,6 +65,25 @@ class WikiProcessor private constructor() {
         return titleToPage
     }
 
+    private fun nextPageId(): Int {
+        if (nextInternalId == Int.MAX_VALUE) {
+            throw IllegalStateException("Too many pages to index with 32-bit ids")
+        }
+        return nextInternalId++
+    }
+
+    private fun finish(): ReadPagesResult {
+        val before = gatherStatistics(titleToPage)
+        dropRedirectLoops(titleToPage)
+        val after = gatherStatistics(titleToPage)
+        val packedPages = packPages(titleToPage)
+        return ReadPagesResult(
+            pages = packedPages,
+            beforeRedirectCleanup = before,
+            afterRedirectCleanup = after
+        )
+    }
+
     companion object {
         private val xmlLimitsConfigured = AtomicBoolean(false)
 
@@ -99,16 +111,19 @@ class WikiProcessor private constructor() {
         fun readPagesWithStats(input: InputStream): ReadPagesResult {
             configureXmlParserLimitsForTrustedWikiDump()
             val processor = WikiProcessor()
-            val pages = processor.preProcess(input)
-            val before = gatherStatistics(pages)
-            dropRedirectLoops(pages)
-            val after = gatherStatistics(pages)
-            val packedPages = packPages(pages)
-            return ReadPagesResult(
-                pages = packedPages,
-                beforeRedirectCleanup = before,
-                afterRedirectCleanup = after
-            )
+            processor.preProcess(input)
+            return processor.finish()
+        }
+
+        fun readPagesWithStatsFrom(openInputs: Iterable<() -> InputStream>): ReadPagesResult {
+            configureXmlParserLimitsForTrustedWikiDump()
+            val processor = WikiProcessor()
+            openInputs.forEach { open ->
+                open().use { input ->
+                    processor.preProcess(input)
+                }
+            }
+            return processor.finish()
         }
 
         private fun possiblyCapitalize(linkName: String): String {
