@@ -66,6 +66,24 @@ GET /health/live
 GET /health/ready
 ```
 
+### Docker
+
+Build a runtime image after one or more wiki graph files exist under `build/wikis/`:
+```bash
+./gradlew convertWiki \
+  -PwikiXmlInput=data/enwiki-2026-06-01-content-bzip2 \
+  -PwikiBinaryOutput=build/wikis/enwiki.segment
+
+./gradlew dockerBuildWikiImage -PwikiDockerImage=wikilinks:enwiki
+```
+
+The image bundles `build/libs/wikilinks.jar` and `build/wikis/*.segment`. On startup it serves every bundled
+segment file using the filename stem as the wiki name, exposes port `8080`, and honors `PORT` and `JAVA_OPTS`.
+To run a local image:
+```bash
+docker run --rm -p 8080:8080 wikilinks:enwiki
+```
+
 You'll eventually get a prompt asking for a start article
 ```
 Please type the starting article ('<' for random article and '#' for wildcard)>

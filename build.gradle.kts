@@ -155,6 +155,7 @@ val wikiNoIndexFlag = providers.gradleProperty("wikiNoIndex")
     .map { it.toBooleanStrictOrNull() ?: error("wikiNoIndex must be true or false") }
     .orElse(false)
 val wikiConvertMaxHeap = providers.gradleProperty("wikiConvertMaxHeap").orElse("4g")
+val wikiDockerImageTag = providers.gradleProperty("wikiDockerImage").orElse("wikilinks:local")
 
 tasks.register<ConvertWikiTask>("convertWiki") {
     group = "wikilinks"
@@ -170,6 +171,28 @@ tasks.register<ConvertWikiTask>("convertWiki") {
         wikiIndexInput.from(wikiIndexInputPath)
     }
     wikiNoIndex.set(wikiNoIndexFlag)
+}
+
+tasks.register<Exec>("dockerBuildWikiImage") {
+    group = "wikilinks"
+    description = "Build a Docker image containing the Wikilinks server and build/wikis/*.segment artifacts."
+    dependsOn(tasks.named("shadowJar"))
+
+    inputs.file(tasks.named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJar").flatMap { it.archiveFile })
+        .withPropertyName("wikilinksJar")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.dir(layout.projectDirectory.dir("build/wikis"))
+        .withPropertyName("wikiArtifacts")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.file(layout.projectDirectory.file("Dockerfile"))
+        .withPropertyName("dockerfile")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.dir(layout.projectDirectory.dir("docker"))
+        .withPropertyName("dockerEntrypoint")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+
+    outputs.upToDateWhen { false }
+    commandLine("docker", "build", "--tag", wikiDockerImageTag.get(), ".")
 }
 
 

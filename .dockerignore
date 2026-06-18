@@ -1,0 +1,10 @@
+*
+!Dockerfile
+!.dockerignore
+!docker/
+!docker/**
+!build/
+!build/libs/
+!build/libs/wikilinks.jar
+!build/wikis/
+!build/wikis/**
