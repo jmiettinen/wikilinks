@@ -46,6 +46,35 @@ class WikiHttpServerTest {
     }
 
     @Test
+    fun `health live returns ok`() {
+        withServer { baseUrl ->
+            val response = get("$baseUrl/health/live")
+            response.statusCode() shouldBe 200
+            response.body() shouldBe """{"status":"ok"}"""
+        }
+    }
+
+    @Test
+    fun `health ready returns loaded wikis`() {
+        withServer { baseUrl ->
+            val response = get("$baseUrl/health/ready")
+            response.statusCode() shouldBe 200
+            response.body() shouldBe """{"status":"ok","wikis":["test"]}"""
+        }
+    }
+
+    @Test
+    fun `health ready returns unavailable when no wikis are loaded`() {
+        ServerWikiRegistry.open(emptyList()).use { registry ->
+            withServer(registry) { baseUrl ->
+                val response = get("$baseUrl/health/ready")
+                response.statusCode() shouldBe 503
+                response.body() shouldBe """{"status":"not ready","wikis":[]}"""
+            }
+        }
+    }
+
+    @Test
     fun `api search returns prefix matches`() {
         withServer { baseUrl ->
             val response = get("$baseUrl/api/test/search?q=Gda")
@@ -158,6 +187,15 @@ class WikiHttpServerTest {
         }
     }
 
+    @Test
+    fun `health rejects unsupported method`() {
+        withServer { baseUrl ->
+            val response = post("$baseUrl/health/live")
+            response.statusCode() shouldBe 405
+            response.body() shouldBe """{"error":"method not allowed"}"""
+        }
+    }
+
     private fun withServer(block: (String) -> Unit) {
         val path = Files.createTempFile("wikilinks-server-api-", ".segment")
         path.toFile().deleteOnExit()
@@ -174,20 +212,36 @@ class WikiHttpServerTest {
             )
         }
         val registry = ServerWikiRegistry.open(listOf(WikiInput("test", path)))
+        try {
+            withServer(registry, block)
+        } finally {
+            registry.close()
+            Files.deleteIfExists(path)
+        }
+    }
+
+    private fun withServer(registry: ServerWikiRegistry, block: (String) -> Unit) {
         val server = WikiHttpServer(registry, 0)
         try {
             server.start()
             block("http://127.0.0.1:${server.port()}")
         } finally {
             server.close()
-            registry.close()
-            Files.deleteIfExists(path)
         }
     }
 
     private fun get(url: String): HttpResponse<String> {
         val client = HttpClient.newBuilder().build()
         val request = HttpRequest.newBuilder().uri(URI(url)).GET().build()
+        return client.send(request, HttpResponse.BodyHandlers.ofString())
+    }
+
+    private fun post(url: String): HttpResponse<String> {
+        val client = HttpClient.newBuilder().build()
+        val request = HttpRequest.newBuilder()
+            .uri(URI(url))
+            .POST(HttpRequest.BodyPublishers.noBody())
+            .build()
         return client.send(request, HttpResponse.BodyHandlers.ofString())
     }
 

@@ -60,6 +60,12 @@ java -jar build/libs/wikilinks.jar query --input data/mywikidump.segment --input
 ```
 to start the interactive querying.
 
+The HTTP server exposes deployment health checks at:
+```
+GET /health/live
+GET /health/ready
+```
+
 You'll eventually get a prompt asking for a start article
 ```
 Please type the starting article ('<' for random article and '#' for wildcard)>

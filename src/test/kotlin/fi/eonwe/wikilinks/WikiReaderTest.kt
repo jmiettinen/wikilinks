@@ -295,6 +295,27 @@ class WikiReaderTest {
     }
 
     @Nested
+    inner class ContentExportSmoke {
+        @Test
+        @Timeout(value = 60, unit = TimeUnit.SECONDS)
+        fun `reads latest Silesian content export part`() {
+            val path = Path.of(javaClass.getResource(TestData.LatestSilesianContentPart.name)!!.toURI())
+
+            val result = WikiReader.readPagesWithStats(
+                FileCompressedSource(path),
+                ProcessingConfig(parallelism = 4U, maxBlocksWaiting = 2U),
+                indexSelection = WikiReader.IndexSelection.DISABLED
+            )
+            val pagesByTitle = result.pages.associateBy { it.title }
+
+            result.beforeRedirectCleanup.articleCount shouldBeGreaterThan 1000
+            result.afterRedirectCleanup.articleCount shouldBeGreaterThan 1000
+            pagesByTitle.containsKey("Lama") shouldBe true
+            pagesByTitle.containsKey("Przodńo zajta") shouldBe true
+        }
+    }
+
+    @Nested
     inner class IndexDrivenReading {
         @Test
         fun `auto mode uses sidecar index when available`() {

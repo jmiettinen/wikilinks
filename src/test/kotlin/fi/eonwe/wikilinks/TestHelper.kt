@@ -23,6 +23,7 @@ private const val FAROESE = "/fowiki-20260201-pages-articles-multistream.xml.bz2
 
 private const val NEW_SILESIAN = "/szlwiki-20260201-pages-articles-multistream.xml.bz2"
 private const val NEW_SILESIAN_INDEX = "/szlwiki-20260201-pages-articles-multistream-index.txt.bz2"
+private const val LATEST_SILESIAN_CONTENT_PART = "/szlwiki-2026-06-01-p2p87807.xml.bz2"
 
 sealed interface TestData {
     val name: String
@@ -47,6 +48,12 @@ sealed interface TestData {
     data object NewSilesianIndex: TestData {
         override val name: String
             get() = NEW_SILESIAN_INDEX
+
+    }
+
+    data object LatestSilesianContentPart: TestData {
+        override val name: String
+            get() = LATEST_SILESIAN_CONTENT_PART
 
     }
 

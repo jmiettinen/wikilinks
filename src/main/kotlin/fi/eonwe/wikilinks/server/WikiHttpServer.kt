@@ -57,6 +57,38 @@ class WikiHttpServer(
                 json(exchange, 200, """{"wikis":[$namesJson]}""")
             }
         }
+        server.createContext("/health/live") { exchange ->
+            handle(exchange) {
+                if (exchange.requestMethod != "GET") {
+                    json(exchange, 405, """{"error":"method not allowed"}""")
+                    return@handle
+                }
+                if (exchange.requestURI.path != "/health/live") {
+                    json(exchange, 404, """{"error":"not found"}""")
+                    return@handle
+                }
+                json(exchange, 200, """{"status":"ok"}""")
+            }
+        }
+        server.createContext("/health/ready") { exchange ->
+            handle(exchange) {
+                if (exchange.requestMethod != "GET") {
+                    json(exchange, 405, """{"error":"method not allowed"}""")
+                    return@handle
+                }
+                if (exchange.requestURI.path != "/health/ready") {
+                    json(exchange, 404, """{"error":"not found"}""")
+                    return@handle
+                }
+                val wikiNames = registry.wikiNames()
+                val namesJson = wikiNames.joinToString(",") { "\"${escapeJson(it)}\"" }
+                if (wikiNames.isEmpty()) {
+                    json(exchange, 503, """{"status":"not ready","wikis":[]}""")
+                } else {
+                    json(exchange, 200, """{"status":"ok","wikis":[$namesJson]}""")
+                }
+            }
+        }
         server.createContext("/api/") { exchange ->
             handle(exchange) {
                 if (exchange.requestMethod != "GET") {
