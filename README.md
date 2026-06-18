@@ -84,6 +84,11 @@ To run a local image:
 docker run --rm -p 8080:8080 wikilinks:enwiki
 ```
 
+To build the GraalVM-based x64 image for Fly.io-style linux/amd64 deployment:
+```bash
+./gradlew dockerBuildGraalVmX64WikiImage -PwikiGraalVmDockerImage=wikilinks:graalvm-x64
+```
+
 You'll eventually get a prompt asking for a start article
 ```
 Please type the starting article ('<' for random article and '#' for wildcard)>

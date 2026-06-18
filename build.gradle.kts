@@ -156,6 +156,7 @@ val wikiNoIndexFlag = providers.gradleProperty("wikiNoIndex")
     .orElse(false)
 val wikiConvertMaxHeap = providers.gradleProperty("wikiConvertMaxHeap").orElse("4g")
 val wikiDockerImageTag = providers.gradleProperty("wikiDockerImage").orElse("wikilinks:local")
+val wikiGraalVmDockerImageTag = providers.gradleProperty("wikiGraalVmDockerImage").orElse("wikilinks:graalvm-x64")
 
 tasks.register<ConvertWikiTask>("convertWiki") {
     group = "wikilinks"
@@ -193,6 +194,34 @@ tasks.register<Exec>("dockerBuildWikiImage") {
 
     outputs.upToDateWhen { false }
     commandLine("docker", "build", "--tag", wikiDockerImageTag.get(), ".")
+}
+
+tasks.register<Exec>("dockerBuildGraalVmX64WikiImage") {
+    group = "wikilinks"
+    description = "Build a linux/amd64 GraalVM Docker image containing the server and build/wikis/*.segment artifacts."
+    dependsOn(tasks.named("shadowJar"))
+
+    inputs.file(tasks.named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJar").flatMap { it.archiveFile })
+        .withPropertyName("wikilinksJar")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.dir(layout.projectDirectory.dir("build/wikis"))
+        .withPropertyName("wikiArtifacts")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.file(layout.projectDirectory.file("Dockerfile.graalvm"))
+        .withPropertyName("dockerfileGraalVm")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.dir(layout.projectDirectory.dir("docker"))
+        .withPropertyName("dockerEntrypoint")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+
+    outputs.upToDateWhen { false }
+    commandLine(
+        "docker", "build",
+        "--platform", "linux/amd64",
+        "--file", "Dockerfile.graalvm",
+        "--tag", wikiGraalVmDockerImageTag.get(),
+        "."
+    )
 }
 
 

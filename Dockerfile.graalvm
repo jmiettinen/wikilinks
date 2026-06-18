@@ -1,0 +1,16 @@
+FROM ghcr.io/graalvm/jdk-community:25@sha256:976b210f70d6a6b9406fb55388ea3f8f4bc4bd77a271f838ed73a75ae0b60d01
+
+WORKDIR /app
+
+COPY build/libs/wikilinks.jar /app/wikilinks.jar
+COPY build/wikis/ /app/wikis/
+COPY docker/entrypoint.sh /app/entrypoint.sh
+
+USER 10001:10001
+
+ENV PORT=8080
+ENV JAVA_OPTS="--enable-native-access=ALL-UNNAMED -XX:MaxRAMPercentage=75.0"
+
+EXPOSE 8080
+
+ENTRYPOINT ["/app/entrypoint.sh"]
