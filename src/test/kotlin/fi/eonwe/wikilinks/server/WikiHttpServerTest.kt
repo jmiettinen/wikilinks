@@ -113,6 +113,16 @@ class WikiHttpServerTest {
     }
 
     @Test
+    fun `api search keeps exact redirect titles searchable`() {
+        withServer { baseUrl ->
+            val response = get("$baseUrl/api/test/search?q=FinlanD&limit=5")
+            response.statusCode() shouldBe 200
+            val results = extractResults(response.body())
+            results.contains("FinlanD") shouldBe true
+        }
+    }
+
+    @Test
     fun `api route returns path without neighborhood by default`() {
         withServer { baseUrl ->
             val response = get("$baseUrl/api/test/route?from=Gda%C5%84sk&to=Polska")

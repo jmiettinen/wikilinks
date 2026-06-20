@@ -144,6 +144,10 @@ class SegmentWikiGraphStore private constructor(
     }
 
     fun forEachTitle(consumer: (Int, String) -> Unit) {
+        forEachTitleRecord { id, title, _ -> consumer(id, title) }
+    }
+
+    fun forEachTitleRecord(consumer: (id: Int, title: String, isRedirect: Boolean) -> Unit) {
         for (entry in 0 until nodeCount) {
             val entryOffset = entry.toLong() * ID_RECORD_SIZE_BYTES
             val id = idIndex.get(I32, entryOffset + ID_ID_OFFSET)
@@ -151,11 +155,12 @@ class SegmentWikiGraphStore private constructor(
             val base = nodeRecordOffset(rank)
             val titleOffset = nodes.get(I64, base + NODE_TITLE_OFFSET)
             val titleLen = nodes.get(I32, base + NODE_TITLE_LEN_OFFSET)
+            val flags = nodes.get(I32, base + NODE_FLAGS_OFFSET)
             val bytes = ByteArray(titleLen)
             for (i in 0 until titleLen) {
                 bytes[i] = titles.get(I8, titleOffset + i)
             }
-            consumer(id, String(bytes, Charsets.UTF_8))
+            consumer(id, String(bytes, Charsets.UTF_8), (flags and FLAG_REDIRECT) != 0)
         }
     }
 

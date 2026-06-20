@@ -2,22 +2,70 @@ package fi.eonwe.wikilinks.server
 
 import fi.eonwe.wikilinks.segmentgraph.SegmentWikiGraphStore
 import java.text.Normalizer
+import java.util.PriorityQueue
 import kotlin.math.abs
 import kotlin.math.min
+
+internal data class SearchCandidate(val title: String, val score: Int, val isRedirect: Boolean)
+
+internal class BoundedSearchCandidates(private val limit: Int) {
+    private val byTitle = HashMap<String, SearchCandidate>(limit * 2)
+    private val worstFirst = PriorityQueue<SearchCandidate>(SEARCH_CANDIDATE_ORDER.reversed())
+
+    val size: Int
+        get() = byTitle.size
+
+    fun add(candidate: SearchCandidate) {
+        val existing = byTitle[candidate.title]
+        if (existing != null) {
+            if (SEARCH_CANDIDATE_ORDER.compare(candidate, existing) >= 0) return
+            byTitle[candidate.title] = candidate
+            worstFirst.remove(existing)
+            worstFirst.add(candidate)
+            return
+        }
+
+        if (byTitle.size < limit) {
+            byTitle[candidate.title] = candidate
+            worstFirst.add(candidate)
+            return
+        }
+
+        val worst = worstFirst.peek() ?: return
+        if (SEARCH_CANDIDATE_ORDER.compare(candidate, worst) >= 0) return
+
+        worstFirst.poll()
+        byTitle.remove(worst.title)
+        byTitle[candidate.title] = candidate
+        worstFirst.add(candidate)
+    }
+
+    fun isFullWithOnlyBetterCandidatesThanFuzzy(): Boolean {
+        val worst = worstFirst.peek() ?: return false
+        return byTitle.size >= limit && worst.score < 0
+    }
+
+    fun results(): List<String> {
+        return byTitle.values.sortedWith(SEARCH_CANDIDATE_ORDER).map { it.title }
+    }
+}
+
+internal val SEARCH_CANDIDATE_ORDER: Comparator<SearchCandidate> =
+    compareBy<SearchCandidate> { it.score }
+        .thenBy { it.isRedirect }
+        .thenBy { it.title }
 
 class WikiSearchIndex(
     private val store: SegmentWikiGraphStore,
     private val maxFuzzyCandidates: Int = 50_000
 ) {
-    private val buckets: Map<Int, IntArray> = buildBuckets(store)
-
     fun search(query: String, limit: Int): List<String> {
         if (limit <= 0) return emptyList()
         val trimmed = query.trim()
         if (trimmed.isEmpty()) return emptyList()
 
         val normalizedQuery = normalizeForSearch(trimmed)
-        val candidates = HashMap<String, ScoredTitle>(limit * 6)
+        val candidates = BoundedSearchCandidates(limit)
 
         // Fast-path for exact/prefix in canonical title index.
         if (store.hasTitle(trimmed)) {
@@ -27,29 +75,26 @@ class WikiSearchIndex(
         for (m in prefixMatches) {
             addCandidate(candidates, m, -1000)
         }
-        if (candidates.size >= limit && normalizedQuery.isEmpty()) {
-            return candidates.values.sortedWith(candidateOrder()).take(limit).map { it.title }
-        }
         if (normalizedQuery.isEmpty()) {
-            return candidates.values.sortedWith(candidateOrder()).take(limit).map { it.title }
+            return candidates.results()
+        }
+        if (candidates.isFullWithOnlyBetterCandidatesThanFuzzy()) {
+            return candidates.results()
         }
 
-        val ids = buckets[bucketKey(normalizedQuery)] ?: IntArray(0)
-        if (ids.isEmpty()) {
-            return candidates.values.sortedWith(candidateOrder()).take(limit).map { it.title }
-        }
-
-        val scanCount = min(ids.size, maxFuzzyCandidates)
-        for (i in 0 until scanCount) {
-            val id = ids[i]
-            val title = store.titleOf(id)
+        val queryBucket = bucketKey(normalizedQuery)
+        var fuzzyCandidatesScanned = 0
+        store.forEachTitleRecord { _, title, isRedirect ->
+            if (isRedirect || fuzzyCandidatesScanned >= maxFuzzyCandidates) return@forEachTitleRecord
             val normalizedTitle = normalizeForSearch(title)
+            if (normalizedTitle.isEmpty() || bucketKey(normalizedTitle) != queryBucket) return@forEachTitleRecord
+            fuzzyCandidatesScanned++
             val score = score(normalizedTitle, normalizedQuery)
             if (score >= 0) {
-                addCandidate(candidates, title, score)
+                candidates.add(SearchCandidate(title = title, score = score, isRedirect = false))
             }
         }
-        return candidates.values.sortedWith(candidateOrder()).take(limit).map { it.title }
+        return candidates.results()
     }
 
     private fun score(normalizedTitle: String, normalizedQuery: String): Int {
@@ -66,38 +111,11 @@ class WikiSearchIndex(
         return if (distance <= maxDistance) 100 + distance else -1
     }
 
-    private data class ScoredTitle(val title: String, val score: Int, val isRedirect: Boolean)
-
-    private fun addCandidate(candidates: MutableMap<String, ScoredTitle>, title: String, baseScore: Int) {
+    private fun addCandidate(candidates: BoundedSearchCandidates, title: String, baseScore: Int) {
         val id = store.findIdByTitle(title) ?: return
         val isRedirect = store.isRedirect(id)
         val redirectPenalty = if (isRedirect) 100 else 0
-        val scored = ScoredTitle(title = title, score = baseScore + redirectPenalty, isRedirect = isRedirect)
-        val existing = candidates[title]
-        if (existing == null || scored.score < existing.score) {
-            candidates[title] = scored
-        }
-    }
-
-    private fun candidateOrder(): Comparator<ScoredTitle> {
-        return compareBy<ScoredTitle> { it.score }
-            .thenBy { it.isRedirect }
-            .thenBy { it.title }
-    }
-
-    private class IntArrayBuilder(initial: Int = 16) {
-        private var data = IntArray(initial)
-        var size = 0
-            private set
-
-        fun add(v: Int) {
-            if (size == data.size) {
-                data = data.copyOf(data.size * 2)
-            }
-            data[size++] = v
-        }
-
-        fun toArray(): IntArray = data.copyOf(size)
+        candidates.add(SearchCandidate(title = title, score = baseScore + redirectPenalty, isRedirect = isRedirect))
     }
 
     companion object {
@@ -115,18 +133,6 @@ class WikiSearchIndex(
                 }
             }
             return out.toString().trim()
-        }
-
-        private fun buildBuckets(store: SegmentWikiGraphStore): Map<Int, IntArray> {
-            val builders = HashMap<Int, IntArrayBuilder>(2048)
-            store.forEachTitle { id, title ->
-                val normalized = normalizeForSearch(title)
-                if (normalized.isEmpty()) return@forEachTitle
-                val key = bucketKey(normalized)
-                val builder = builders.getOrPut(key) { IntArrayBuilder() }
-                builder.add(id)
-            }
-            return builders.mapValues { it.value.toArray() }
         }
 
         private fun bucketKey(normalized: String): Int {
