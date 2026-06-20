@@ -2,7 +2,7 @@ package fi.eonwe.wikilinks.server
 
 import fi.eonwe.wikilinks.segmentgraph.SegmentWikiGraphStore
 import java.text.Normalizer
-import java.util.PriorityQueue
+import java.util.TreeSet
 import kotlin.math.abs
 import kotlin.math.min
 
@@ -10,7 +10,7 @@ internal data class SearchCandidate(val title: String, val score: Int, val isRed
 
 internal class BoundedSearchCandidates(private val limit: Int) {
     private val byTitle = HashMap<String, SearchCandidate>(limit * 2)
-    private val worstFirst = PriorityQueue<SearchCandidate>(SEARCH_CANDIDATE_ORDER.reversed())
+    private val ordered = TreeSet<SearchCandidate>(SEARCH_CANDIDATE_ORDER)
 
     val size: Int
         get() = byTitle.size
@@ -20,33 +20,33 @@ internal class BoundedSearchCandidates(private val limit: Int) {
         if (existing != null) {
             if (SEARCH_CANDIDATE_ORDER.compare(candidate, existing) >= 0) return
             byTitle[candidate.title] = candidate
-            worstFirst.remove(existing)
-            worstFirst.add(candidate)
+            ordered.remove(existing)
+            ordered.add(candidate)
             return
         }
 
         if (byTitle.size < limit) {
             byTitle[candidate.title] = candidate
-            worstFirst.add(candidate)
+            ordered.add(candidate)
             return
         }
 
-        val worst = worstFirst.peek() ?: return
+        val worst = ordered.lastOrNull() ?: return
         if (SEARCH_CANDIDATE_ORDER.compare(candidate, worst) >= 0) return
 
-        worstFirst.poll()
+        ordered.remove(worst)
         byTitle.remove(worst.title)
         byTitle[candidate.title] = candidate
-        worstFirst.add(candidate)
+        ordered.add(candidate)
     }
 
     fun isFullWithOnlyBetterCandidatesThanFuzzy(): Boolean {
-        val worst = worstFirst.peek() ?: return false
+        val worst = ordered.lastOrNull() ?: return false
         return byTitle.size >= limit && worst.score < 0
     }
 
     fun results(): List<String> {
-        return byTitle.values.sortedWith(SEARCH_CANDIDATE_ORDER).map { it.title }
+        return ordered.map { it.title }
     }
 }
 
