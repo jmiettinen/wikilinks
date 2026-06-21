@@ -8,7 +8,6 @@ import java.io.IOException
 import java.io.InputStream
 import java.io.InputStreamReader
 import java.nio.ByteBuffer
-import java.nio.MappedByteBuffer
 import java.nio.channels.Channels
 import java.nio.channels.FileChannel
 import java.nio.file.Path
@@ -28,14 +27,6 @@ object WikiReader {
         EXPLICIT
     }
 
-    fun processWiki(data: MappedByteBuffer, config: ProcessingConfig) {
-        readPages(data, config)
-    }
-
-    fun readPages(data: MappedByteBuffer, config: ProcessingConfig = defaultProcessingConfig): MutableList<BufferWikiPage> {
-        return readPagesWithStats(ByteBufferCompressedSource(data), config).pages
-    }
-
     fun readPages(
         source: FileCompressedSource,
         config: ProcessingConfig = defaultProcessingConfig,
@@ -47,13 +38,6 @@ object WikiReader {
 
     fun readPages(source: CompressedSource, config: ProcessingConfig = defaultProcessingConfig): MutableList<BufferWikiPage> {
         return readPagesWithStats(source, config).pages
-    }
-
-    fun readPagesWithStats(
-        data: MappedByteBuffer,
-        config: ProcessingConfig = defaultProcessingConfig
-    ): WikiProcessor.ReadPagesResult {
-        return readPagesWithStats(ByteBufferCompressedSource(data), config)
     }
 
     fun readPagesWithStats(

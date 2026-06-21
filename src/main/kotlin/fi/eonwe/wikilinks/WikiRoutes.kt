@@ -167,7 +167,7 @@ class WikiRoutes(pages: List<BufferWikiPage>) {
             ) { linkerId: Int, linkCount: Int, firstLinkIndex: Int, firstPastLastLinkIndex: Int ->
                 for (i in firstLinkIndex..<firstPastLastLinkIndex) {
                     val targetId = links[i]
-                    val startLinkIndex = reversedIndex.getOrDefault(targetId, Int.Companion.MIN_VALUE)
+                    val startLinkIndex = reversedIndex.getOrDefault(targetId, Int.MIN_VALUE)
                     val reverseLinkIndex = startLinkIndex + 1
                     val reverseLinksWritten = reversedLinks[reverseLinkIndex]
                     val newLinkerIndex = reverseLinkIndex + reverseLinksWritten + 1

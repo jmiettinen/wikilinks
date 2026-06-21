@@ -115,52 +115,46 @@ class SegmentWikiGraphStore private constructor(
 
     fun forEachNode(consumer: (NodeRecord) -> Unit) {
         for (entry in 0 until nodeCount) {
-            val entryOffset = entry.toLong() * ID_RECORD_SIZE_BYTES
-            val id = idIndex.get(I32, entryOffset + ID_ID_OFFSET)
-            val rank = idIndex.get(I32, entryOffset + ID_RANK_OFFSET)
-            val base = nodeRecordOffset(rank)
-            val titleOffset = nodes.get(I64, base + NODE_TITLE_OFFSET)
-            val titleLen = nodes.get(I32, base + NODE_TITLE_LEN_OFFSET)
-            val titleBytes = ByteArray(titleLen)
-            for (i in 0 until titleLen) {
-                titleBytes[i] = titles.get(I8, titleOffset + i)
-            }
-            val outStart = nodes.get(I64, base + NODE_OUT_START_OFFSET)
-            val outDegree = nodes.get(I32, base + NODE_OUT_DEGREE_OFFSET)
-            val outLinks = IntArray(outDegree)
-            for (i in 0 until outDegree) {
-                outLinks[i] = outEdges.get(I32, (outStart + i.toLong()) * Int.SIZE_BYTES)
-            }
-            val flags = nodes.get(I32, base + NODE_FLAGS_OFFSET)
-            consumer(
-                NodeRecord(
-                    id = id,
-                    title = String(titleBytes, Charsets.UTF_8),
-                    isRedirect = (flags and FLAG_REDIRECT) != 0,
-                    outLinks = outLinks
+            readEntry(entry) { base, id, flags, title ->
+                val outStart = nodes.get(I64, base + NODE_OUT_START_OFFSET)
+                val outDegree = nodes.get(I32, base + NODE_OUT_DEGREE_OFFSET)
+                val outLinks = IntArray(outDegree)
+                for (i in 0 until outDegree) {
+                    outLinks[i] = outEdges.get(I32, (outStart + i.toLong()) * Int.SIZE_BYTES)
+                }
+                consumer(
+                    NodeRecord(
+                        id = id,
+                        title = title,
+                        isRedirect = (flags and FLAG_REDIRECT) != 0,
+                        outLinks = outLinks
+                    )
                 )
-            )
+            }
         }
     }
 
-    fun forEachTitle(consumer: (Int, String) -> Unit) {
-        forEachTitleRecord { id, title, _ -> consumer(id, title) }
+    private fun readEntry(entryIndex: Int, entryConsumer: (base: Long, id: Int, flags: Int, title: String) -> Unit) {
+        val entryOffset = entryIndex.toLong() * ID_RECORD_SIZE_BYTES
+        val id = idIndex.get(I32, entryOffset + ID_ID_OFFSET)
+        val rank = idIndex.get(I32, entryOffset + ID_RANK_OFFSET)
+        val base = nodeRecordOffset(rank)
+        val titleOffset = nodes.get(I64, base + NODE_TITLE_OFFSET)
+        val titleLen = nodes.get(I32, base + NODE_TITLE_LEN_OFFSET)
+        val titleBytes = ByteArray(titleLen)
+        for (i in 0 until titleLen) {
+            titleBytes[i] = titles.get(I8, titleOffset + i)
+        }
+        val title = String(titleBytes, Charsets.UTF_8)
+        val flags = nodes.get(I32, base + NODE_FLAGS_OFFSET)
+        entryConsumer(base, id, flags, title)
     }
 
     fun forEachTitleRecord(consumer: (id: Int, title: String, isRedirect: Boolean) -> Unit) {
         for (entry in 0 until nodeCount) {
-            val entryOffset = entry.toLong() * ID_RECORD_SIZE_BYTES
-            val id = idIndex.get(I32, entryOffset + ID_ID_OFFSET)
-            val rank = idIndex.get(I32, entryOffset + ID_RANK_OFFSET)
-            val base = nodeRecordOffset(rank)
-            val titleOffset = nodes.get(I64, base + NODE_TITLE_OFFSET)
-            val titleLen = nodes.get(I32, base + NODE_TITLE_LEN_OFFSET)
-            val flags = nodes.get(I32, base + NODE_FLAGS_OFFSET)
-            val bytes = ByteArray(titleLen)
-            for (i in 0 until titleLen) {
-                bytes[i] = titles.get(I8, titleOffset + i)
+            readEntry(entry) { _, id, flags, title ->
+                consumer(id, title, (flags and FLAG_REDIRECT) != 0)
             }
-            consumer(id, String(bytes, Charsets.UTF_8), (flags and FLAG_REDIRECT) != 0)
         }
     }
 

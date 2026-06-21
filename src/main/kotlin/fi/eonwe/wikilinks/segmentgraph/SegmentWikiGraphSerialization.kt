@@ -6,7 +6,6 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.channels.FileChannel
 import java.nio.file.Path
-import java.nio.file.StandardOpenOption
 import kotlin.math.min
 
 class SegmentWikiGraphSerialization {
@@ -375,33 +374,34 @@ class SegmentWikiGraphSerialization {
         val title: String,
         val isRedirect: Boolean,
         val links: IntArray
-    )
+    ) {
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (javaClass != other?.javaClass) return false
+
+            other as PageRecord
+
+            if (id != other.id) return false
+            if (isRedirect != other.isRedirect) return false
+            if (title != other.title) return false
+            if (!links.contentEquals(other.links)) return false
+
+            return true
+        }
+
+        override fun hashCode(): Int {
+            var result = id
+            result = 31 * result + isRedirect.hashCode()
+            result = 31 * result + title.hashCode()
+            result = 31 * result + links.contentHashCode()
+            return result
+        }
+    }
 
     companion object {
         fun open(path: Path): SegmentWikiGraphStore {
             return SegmentWikiGraphStore.open(path)
         }
 
-        fun writeTo(path: Path, pages: Collection<BufferWikiPage>) {
-            FileChannel.open(
-                path,
-                StandardOpenOption.WRITE,
-                StandardOpenOption.CREATE,
-                StandardOpenOption.TRUNCATE_EXISTING
-            ).use { channel ->
-                SegmentWikiGraphSerialization().serialize(pages, channel)
-            }
-        }
-
-        fun writeFatPagesTo(path: Path, pages: Collection<WikiPageData>) {
-            FileChannel.open(
-                path,
-                StandardOpenOption.WRITE,
-                StandardOpenOption.CREATE,
-                StandardOpenOption.TRUNCATE_EXISTING
-            ).use { channel ->
-                SegmentWikiGraphSerialization().serializeFatPages(pages, channel)
-            }
-        }
     }
 }

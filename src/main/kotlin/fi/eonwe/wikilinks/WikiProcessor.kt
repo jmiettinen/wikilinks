@@ -172,7 +172,7 @@ class WikiProcessor private constructor() {
                 if (visited.containsKey(immediateTarget)) {
                     return false
                 } else {
-                    visited.put(immediateTarget, true)
+                    visited[immediateTarget] = true
                 }
                 val redirectPage = immediateTarget
                 val redirectPointer = map[redirectPage.target]
@@ -218,10 +218,6 @@ class WikiProcessor private constructor() {
                 linkCount = linkCount,
                 nullLinkCount = nullLinkCount
             )
-        }
-
-        fun printStatistics(map: MutableMap<String, PagePointer>) {
-            printStatistics(gatherStatistics(map))
         }
 
         fun printStatistics(stats: GraphStatistics) {

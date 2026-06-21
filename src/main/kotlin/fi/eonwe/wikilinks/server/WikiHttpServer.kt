@@ -147,11 +147,12 @@ class WikiHttpServer(
             json(exchange, 429, """{"error":"too many route queries in flight"}""")
             return
         }
-        val query = parseQuery(exchange.requestURI)
-        val from = query["from"]?.trim().orEmpty()
-        val to = query["to"]?.trim().orEmpty()
-        val neighborhoodLimit = query["neighborhood"]?.toIntOrNull()?.coerceIn(0, 1000) ?: DEFAULT_NEIGHBORHOOD_LIMIT
         try {
+            val query = parseQuery(exchange.requestURI)
+            val from = query["from"]?.trim().orEmpty()
+            val to = query["to"]?.trim().orEmpty()
+            val neighborhoodLimit = query["neighborhood"]?.toIntOrNull()?.coerceIn(0, 1000) ?: DEFAULT_NEIGHBORHOOD_LIMIT
+
             if (from.isEmpty() || to.isEmpty()) {
                 json(exchange, 400, """{"error":"missing from/to"}""")
                 return
