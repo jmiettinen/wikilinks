@@ -8,8 +8,21 @@ import java.nio.channels.FileChannel
 import java.nio.file.Path
 import java.nio.file.StandardOpenOption
 import java.util.concurrent.ThreadLocalRandom
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.min
 
+/**
+ * Read-only memory-mapped wiki graph store.
+ *
+ * Construction and use protocol:
+ * - `open` maps all graph sections read-only in an `Arena.ofShared()`, so public read methods may be called
+ *   concurrently by multiple threads while the store is open.
+ * - `IntCursor` instances returned by neighbor methods are mutable, single-consumer cursors. Create one cursor
+ *   per traversal and do not share a cursor across threads.
+ * - The owner must quiesce all readers before calling `close`. `close` is idempotent, but it intentionally does
+ *   not coordinate with in-flight readers because doing so would put synchronization on the hot graph path.
+ * - No public read method may be called after `close`.
+ */
 class SegmentWikiGraphStore private constructor(
     private val channel: FileChannel,
     private val arena: Arena,
@@ -22,8 +35,10 @@ class SegmentWikiGraphStore private constructor(
     private val idIndex: MemorySegment,
     val nodeCount: Int
 ) : AutoCloseable {
+    private val closed = AtomicBoolean(false)
 
     fun findIdByTitle(title: String): Int? {
+        requireOpen()
         val query = title.toByteArray(Charsets.UTF_8)
         val rank = binarySearchNameIndex(query)
         return if (rank >= 0) nameRecordId(rank) else null
@@ -46,12 +61,14 @@ class SegmentWikiGraphStore private constructor(
     fun hasTitle(title: String): Boolean = findIdByTitle(title) != null
 
     fun randomTitle(): String? {
+        requireOpen()
         if (nodeCount == 0) return null
         val rank = ThreadLocalRandom.current().nextInt(nodeCount)
         return titleOf(nameRecordId(rank))
     }
 
     fun findTitlesByPrefix(prefix: String, maxMatches: Int): List<String> {
+        requireOpen()
         if (maxMatches <= 0 || nodeCount == 0) return emptyList()
         val p = prefix.toByteArray(Charsets.UTF_8)
         var lo = 0
@@ -79,6 +96,7 @@ class SegmentWikiGraphStore private constructor(
     }
 
     fun titleOf(id: Int): String {
+        requireOpen()
         val rank = rankOfId(id)
         val base = nodeRecordOffset(rank)
         val titleOffset = nodes.get(I64, base + NODE_TITLE_OFFSET)
@@ -91,6 +109,7 @@ class SegmentWikiGraphStore private constructor(
     }
 
     fun isRedirect(id: Int): Boolean {
+        requireOpen()
         val rank = rankOfId(id)
         val base = nodeRecordOffset(rank)
         val flags = nodes.get(I32, base + NODE_FLAGS_OFFSET)
@@ -98,6 +117,7 @@ class SegmentWikiGraphStore private constructor(
     }
 
     fun outNeighbors(id: Int): IntCursor {
+        requireOpen()
         val rank = rankOfId(id)
         val base = nodeRecordOffset(rank)
         val start = nodes.get(I64, base + NODE_OUT_START_OFFSET)
@@ -106,6 +126,7 @@ class SegmentWikiGraphStore private constructor(
     }
 
     fun inNeighbors(id: Int): IntCursor {
+        requireOpen()
         val rank = rankOfId(id)
         val base = nodeRecordOffset(rank)
         val start = nodes.get(I64, base + NODE_IN_START_OFFSET)
@@ -114,6 +135,7 @@ class SegmentWikiGraphStore private constructor(
     }
 
     fun forEachNode(consumer: (NodeRecord) -> Unit) {
+        requireOpen()
         for (entry in 0 until nodeCount) {
             readEntry(entry) { base, id, flags, title ->
                 val outStart = nodes.get(I64, base + NODE_OUT_START_OFFSET)
@@ -151,6 +173,7 @@ class SegmentWikiGraphStore private constructor(
     }
 
     fun forEachTitleRecord(consumer: (id: Int, title: String, isRedirect: Boolean) -> Unit) {
+        requireOpen()
         for (entry in 0 until nodeCount) {
             readEntry(entry) { _, id, flags, title ->
                 consumer(id, title, (flags and FLAG_REDIRECT) != 0)
@@ -159,8 +182,16 @@ class SegmentWikiGraphStore private constructor(
     }
 
     override fun close() {
-        arena.close()
-        channel.close()
+        if (!closed.compareAndSet(false, true)) return
+        try {
+            arena.close()
+        } finally {
+            channel.close()
+        }
+    }
+
+    private fun requireOpen() {
+        check(!closed.get()) { "SegmentWikiGraphStore is closed" }
     }
 
     private fun nameRecordOffset(rank: Int): Long = rank.toLong() * NAME_RECORD_SIZE_BYTES

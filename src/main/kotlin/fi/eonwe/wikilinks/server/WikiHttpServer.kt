@@ -8,19 +8,27 @@ import java.net.InetSocketAddress
 import java.net.URI
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
+import java.time.Duration
 import java.util.Locale
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 class WikiHttpServer(
     private val registry: ServerWikiRegistry,
     port: Int = 8080,
-    maxInFlightRoutes: Int = 8
+    maxInFlightRoutes: Int = 8,
+    private val shutdownTimeout: Duration = Duration.ofSeconds(30)
 ) : AutoCloseable {
     private val routeLimiter = InFlightRequestLimiter(maxInFlightRoutes)
     private val server = HttpServer.create(InetSocketAddress(port), 0)
     private val executor = Executors.newVirtualThreadPerTaskExecutor()
+    private val closed = AtomicBoolean(false)
 
     init {
+        require(!shutdownTimeout.isNegative && !shutdownTimeout.isZero) {
+            "shutdownTimeout must be positive"
+        }
         server.executor = executor
         server.createContext("/") { exchange ->
             handle(exchange) {
@@ -124,8 +132,24 @@ class WikiHttpServer(
     fun port(): Int = server.address.port
 
     override fun close() {
+        if (!closed.compareAndSet(false, true)) return
         server.stop(0)
         executor.shutdown()
+        val timeoutMillis = shutdownTimeout.toMillis().coerceAtLeast(1)
+        try {
+            if (!executor.awaitTermination(timeoutMillis, TimeUnit.MILLISECONDS)) {
+                executor.shutdownNow()
+                if (!executor.awaitTermination(timeoutMillis, TimeUnit.MILLISECONDS)) {
+                    throw IllegalStateException(
+                        "HTTP request executor did not terminate within $shutdownTimeout"
+                    )
+                }
+            }
+        } catch (e: InterruptedException) {
+            executor.shutdownNow()
+            Thread.currentThread().interrupt()
+            throw IllegalStateException("Interrupted while waiting for HTTP request executor shutdown", e)
+        }
     }
 
     private fun handleSearch(exchange: HttpExchange, wiki: ServerWikiRegistry.LoadedWiki, wikiName: String) {
